@@ -1,7 +1,11 @@
 import streamlit as st
 
 from dashboard.data_service import apply_categorical_filter, detect_columns, load_uploaded_csv
-from dashboard.plots_view import render_boxplot, render_count_plot, render_scatter_plot
+from dashboard.plots_view import (
+    render_count_plot,
+    render_correlation_matrix,
+    render_scatter_plot,
+)
 from dashboard.ui_view import (
     render_dataset_overview,
     render_filter_multiselect,
@@ -21,11 +25,11 @@ def render() -> None:
     df, load_error = load_uploaded_csv(uploaded_file)
     if load_error:
         st.error(f"Could not read uploaded CSV: {load_error}")
-        st.stop()
+        return
 
     if df is None:
         st.info("Upload a CSV file to begin exploring your data.")
-        st.stop()
+        return
 
     st.success("Dataset uploaded successfully.")
     render_dataset_overview(df)
@@ -33,7 +37,7 @@ def render() -> None:
     numeric_cols, categorical_cols = detect_columns(df)
     render_guardrails(numeric_cols, categorical_cols)
 
-    selected_cat_col, selected_num_col, selected_x_col, selected_y_col = render_sidebar_controls(
+    selected_cat_col, selected_x_col, selected_y_col = render_sidebar_controls(
         numeric_cols=numeric_cols,
         categorical_cols=categorical_cols,
     )
@@ -47,9 +51,9 @@ def render() -> None:
             "Skipping categorical filters."
         )
 
-    render_summary_metrics(filtered_df, selected_num_col)
+    render_summary_metrics(filtered_df)
 
     st.subheader("Visualizations")
     render_count_plot(filtered_df, selected_cat_col)
-    render_boxplot(filtered_df, selected_cat_col, selected_num_col)
     render_scatter_plot(filtered_df, selected_x_col, selected_y_col)
+    render_correlation_matrix(filtered_df, numeric_cols)

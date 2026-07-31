@@ -1,109 +1,95 @@
 # DeltaAI Agent Handoff
 
 ## Project Goal
-Build a beginner-friendly Streamlit Bio Explorer dashboard with clear separation of concerns, upload-first flow, and easy future extension.
+Build a beginner-friendly Streamlit Bio Explorer app with clear separation of concerns, upload-first dashboard flow, and a disease-prediction page driven by pickle model assets.
 
 ## Current Status
-- Virtual environment `venv` was created.
-- Dependencies were installed (`streamlit`, `pandas`, `numpy`, `matplotlib`, `seaborn`).
-- `requirements.txt` exists and is populated from `pip freeze`.
-- App has been refactored so `app.py` only orchestrates pages.
-- Dashboard logic now lives in a dedicated page module and supporting service/view modules.
+- Virtual environment `venv` exists.
+- Dependencies include `streamlit`, `pandas`, `numpy`, `matplotlib`, `seaborn`, and pinned `scikit-learn==1.6.1` (plus `joblib`, `scipy`).
+- `app.py` only orchestrates pages.
+- Pages:
+  - `Dashboard` (CSV explore / plots)
+  - `Disease Prediction` (symptom checklist → disease probabilities)
+- Default model assets copied to:
+  - `models/model.pkl`
+  - `models/symptoms.pkl`
+  - `models/model_metadata.pkl`
+- Original root pickles still present (`disease_model.pkl`, `symptom_columns.pkl`, `model_metadata.pkl`).
+- Prediction verification tests pass: `python -m unittest tests.test_prediction -v`
 
 ## Architecture (Current)
 
 ### 1) App-level orchestration
 - **File:** `app.py`
 - **Responsibility:** Route/orchestrate between pages only.
-- **Behavior:** Uses sidebar navigation and defaults to `Dashboard` on load.
+- **Navigation:** Top tabs (`st.tabs`) for `Dashboard` and `Disease Prediction`
+- **Page config:** `st.set_page_config` is called once in `app.py`
 
-### 2) Dashboard page (feature orchestration)
-- **File:** `pages/dashboard_page.py`
-- **Responsibility:** Coordinate dashboard flow:
-  - upload CSV
-  - load dataframe safely
-  - detect column types
-  - render controls
-  - apply filters
-  - show metrics and plots
+### 2) Dashboard page
+- **File:** `app_pages/dashboard_page.py`
+- Uses `dashboard/data_service.py`, `dashboard/ui_view.py`, `dashboard/plots_view.py`
+- Upload-first CSV explorer with count plot, scatter, correlation matrix
+- Plot sizes capped to avoid Pillow decompression bomb errors
 
-### 3) Data/service layer
-- **File:** `dashboard/data_service.py`
-- **Responsibility:**
-  - `load_uploaded_csv(uploaded_file)` with safe error return
-  - `detect_columns(df)` for numeric/categorical detection
-  - `apply_categorical_filter(df, selected_cat_col, selected_values)` for safe filtering
+### 3) Disease Prediction page
+- **File:** `app_pages/prediction_page.py`
+- Coordinates prediction UI + controller flow
 
-### 4) UI view layer
-- **File:** `dashboard/ui_view.py`
-- **Responsibility:**
-  - page header and uploader
-  - dataset preview and size metrics
-  - sidebar controls
-  - guardrail warnings
-  - summary metrics
+### 4) Prediction package (`prediction/`)
+Core entities requested by product requirements:
 
-### 5) Plot rendering layer
-- **File:** `dashboard/plots_view.py`
-- **Responsibility:**
-  - count plot
-  - boxplot
-  - scatter plot
-  - interpretation notes/captions under each chart
+| Entity | File | Responsibility |
+|---|---|---|
+| DiseasePredictionController | `prediction/controller.py` | Validate request, build features, call model, build result |
+| Symptoms | `prediction/symptoms.py` | Load expandable symptom names from pickle; build binary feature vector |
+| Model | loaded via loader | LogisticRegression from `models/model.pkl` (joblib) |
+| PredictionRequest | `prediction/prediction_request.py` | Selected symptom list |
+| PredictionResult | `prediction/prediction_result.py` | Top disease, confidence, top-N ranked probs, low-confidence flag |
+| ModelLoader | `prediction/model_loader.py` | Load model/symptoms/metadata from default paths or uploads |
+| User Interface | `prediction/ui_view.py` | Checklist, uploaders, result rendering |
 
-## Implemented Functional Requirements
-- Upload-first behavior (no default dataset auto-load).
-- Dataset preview, row count, column count.
-- Auto-detection of numeric and categorical columns.
-- Sidebar controls for:
-  - categorical group/filter column
-  - numeric column for boxplot + average metric
-  - numeric x/y for scatter
-- Categorical value filtering.
-- Summary metrics after filtering:
-  - total filtered rows
-  - average of selected numeric column
-- Visualizations:
-  - count plot (categorical)
-  - boxplot (numeric by categorical)
-  - scatter plot (numeric x vs y)
-- Guardrails:
-  - warnings when numeric/categorical columns are missing
-  - safe checks for missing/invalid columns
-  - safe behavior on empty filtered results
+## Disease Prediction Behavior
+- Symptoms loaded from pickle (not hardcoded); currently 132 features.
+- Multi-select checklist.
+- Feature vector: ordered binary vector matching `symptoms.pkl`.
+- Prediction uses `predict_proba`.
+- Shows:
+  - Top-1 most likely disease
+  - Top-N ranked probabilities where **N = 3**
+- Low-confidence flag when top probability **< 0.50**
+- Empty selection error: user must select at least one symptom
+- Defaults from `models/`; optional uploaders can override model/symptoms/metadata
+
+## Decisions Locked In
+- Confidence threshold: **0.50**
+- Ranked display: **Top-1 + Top-3**
+- Default assets: copy into `models/` (`C1`)
+- sklearn pin: **`scikit-learn==1.6.1`** (`D1`)
+- Model load method: **joblib** (plain pickle fails on this artifact)
 
 ## How To Run
-From project root:
-
 ```bash
 source venv/bin/activate
 streamlit run app.py
 ```
 
-Windows PowerShell equivalent:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-streamlit run app.py
+## How To Verify Prediction Logic
+```bash
+source venv/bin/activate
+python -m unittest tests.test_prediction -v
 ```
 
 ## Notes For Next Agent
 - Keep `app.py` thin (page orchestration only).
-- Add new pages under `pages/` and register them in `app.py`.
-- Keep data logic in `dashboard/data_service.py`.
-- Keep rendering/UI in view modules (`ui_view.py`, `plots_view.py`).
-- Maintain beginner-readable style and explicit guardrails.
+- Top-tab navigation uses `st.tabs` in `app.py` (sidebar page selectbox removed).
+- Page modules live in `app_pages/` (not Streamlit's reserved `pages/` folder) so automatic multipage sidebar links are not shown.
+- Important: page modules must use `return` (not `st.stop()`) for early exits, because `st.stop()` halts the whole script and leaves other tabs blank.
+- Do not hardcode symptom names; always load from symptoms pickle.
+- Keep prediction business logic in `prediction/`, UI in `prediction/ui_view.py`, page wiring in `app_pages/prediction_page.py`.
+- Medical disclaimer remains important: this is not a clinical diagnosis tool.
+- Avoid unbounded matplotlib figure sizes on dashboard plots.
 
 ## Suggested Next Steps
-1. Add at least one extra page (e.g., `About`, `Data Dictionary`, or `Insights`).
-2. Add lightweight tests for service functions in `dashboard/data_service.py`.
-3. Optionally simplify `requirements.txt` to top-level packages if desired.
-4. Commit current work once ready.
-
-## Git Snapshot Context
-- Repository currently appears to be in an initial state with uncommitted files.
-- Recent work includes creating and refactoring:
-  - `app.py`
-  - `dashboard/`
-  - `pages/`
-  - `requirements.txt`
+1. Add medical disclaimer emphasis / clinician-referral copy if product requires it.
+2. Optionally add search/filter for long symptom checklist UX.
+3. Commit current work once ready.

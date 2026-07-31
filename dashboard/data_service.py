@@ -31,3 +31,26 @@ def apply_categorical_filter(
     if not selected_values:
         return df.iloc[0:0].copy()
     return df[df[selected_cat_col].isin(selected_values)].copy()
+
+
+def compute_correlation_matrix(
+    df: pd.DataFrame,
+    numeric_cols: list[str],
+) -> pd.DataFrame | None:
+    """Return Pearson correlation matrix for numeric columns, or None if unavailable."""
+    if len(numeric_cols) < 2:
+        return None
+
+    available_cols = [col for col in numeric_cols if col in df.columns]
+    if len(available_cols) < 2:
+        return None
+
+    numeric_df = df[available_cols].dropna(how="all")
+    if len(numeric_df) < 2:
+        return None
+
+    corr_matrix = numeric_df.corr(numeric_only=True)
+    if corr_matrix.empty:
+        return None
+
+    return corr_matrix
