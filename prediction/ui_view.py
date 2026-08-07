@@ -38,7 +38,27 @@ def render_asset_uploaders() -> tuple:
     return model_file, symptoms_file, metadata_file
 
 
+@st.cache_resource
+def _load_default_assets():
+    """Cache default model assets so Cloud startup is not repeated every rerun."""
+    loader = ModelLoader()
+    model = loader.load_model(DEFAULT_MODEL_PATH)
+    symptoms = loader.load_symptoms(DEFAULT_SYMPTOMS_PATH)
+    metadata = None
+    if DEFAULT_METADATA_PATH.exists():
+        metadata = loader.load_metadata(DEFAULT_METADATA_PATH)
+    return model, symptoms, metadata
+
+
 def load_prediction_assets(model_file, symptoms_file, metadata_file):
+    using_defaults = model_file is None and symptoms_file is None and metadata_file is None
+    if using_defaults:
+        if not DEFAULT_MODEL_PATH.exists() or not DEFAULT_SYMPTOMS_PATH.exists():
+            raise FileNotFoundError(
+                "Default model assets were not found in models/. Please upload model and symptoms files."
+            )
+        return _load_default_assets()
+
     loader = ModelLoader()
 
     model_source = model_file if model_file is not None else DEFAULT_MODEL_PATH

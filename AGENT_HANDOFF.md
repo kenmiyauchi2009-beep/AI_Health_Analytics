@@ -22,7 +22,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 ### 1) App-level orchestration
 - **File:** `app.py`
 - **Responsibility:** Route/orchestrate between pages only.
-- **Navigation:** Top tabs (`st.tabs`) for `Dashboard` and `Disease Prediction`
+- **Navigation:** Top segmented control for `Dashboard` and `Disease Prediction` (exclusive page render)
 - **Page config:** `st.set_page_config` is called once in `app.py`
 
 ### 2) Dashboard page
@@ -81,9 +81,11 @@ python -m unittest tests.test_prediction -v
 
 ## Notes For Next Agent
 - Keep `app.py` thin (page orchestration only).
-- Top-tab navigation uses `st.tabs` in `app.py` (sidebar page selectbox removed).
+- Top navigation uses exclusive `st.segmented_control` (not `st.tabs`) so only the active page runs.
+- `requirements.txt` is intentionally lean for Streamlit Community Cloud; do not re-freeze local Python 3.14 macOS pins.
+- On Streamlit Cloud, set Python to **3.12** (or 3.11) in app Advanced settings; `runtime.txt` is ignored by Community Cloud.
 - Page modules live in `app_pages/` (not Streamlit's reserved `pages/` folder) so automatic multipage sidebar links are not shown.
-- Important: page modules must use `return` (not `st.stop()`) for early exits, because `st.stop()` halts the whole script and leaves other tabs blank.
+- Important: page modules must use `return` (not `st.stop()`) for early exits.
 - Do not hardcode symptom names; always load from symptoms pickle.
 - Keep prediction business logic in `prediction/`, UI in `prediction/ui_view.py`, page wiring in `app_pages/prediction_page.py`.
 - Medical disclaimer remains important: this is not a clinical diagnosis tool.
