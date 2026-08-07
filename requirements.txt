@@ -1,10 +1,11 @@
-# Keep this lean for Streamlit Community Cloud.
-# Avoid freezing local Python 3.14 macOS builds; let Cloud resolve Linux wheels.
+# Streamlit Community Cloud currently often runs Python 3.14.
+# Pin packages that publish cp314 wheels so uv does not hang building from source.
+# Note: model was trained on sklearn 1.6.1; 1.7+ loads it with a version warning.
 streamlit>=1.28.0,<2
-pandas>=2.0.0,<3
-numpy>=1.24.0,<3
-matplotlib>=3.7.0,<4
-seaborn>=0.13.0,<1
-scikit-learn==1.6.1
+pandas>=2.2.0
+numpy>=2.1.0
+matplotlib>=3.9.0
+seaborn>=0.13.0
+scikit-learn>=1.7.2,<2
 joblib>=1.2.0
-scipy>=1.10.0,<2
+scipy>=1.14.0

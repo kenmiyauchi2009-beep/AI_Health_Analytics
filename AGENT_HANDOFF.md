@@ -64,8 +64,7 @@ Core entities requested by product requirements:
 - Confidence threshold: **0.50**
 - Ranked display: **Top-1 + Top-3**
 - Default assets: copy into `models/` (`C1`)
-- sklearn pin: **`scikit-learn==1.6.1`** (`D1`)
-- Model load method: **joblib** (plain pickle fails on this artifact)
+- sklearn pin for local training compatibility was `1.6.1`, but Cloud on Python 3.14 needs `>=1.7.2` (has binary wheels). Model still loads under newer sklearn.
 
 ## How To Run
 ```bash
