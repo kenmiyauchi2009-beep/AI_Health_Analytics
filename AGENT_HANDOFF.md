@@ -1,70 +1,79 @@
 # DeltaAI Agent Handoff
 
 ## Project Goal
-Build a beginner-friendly Streamlit Bio Explorer app with clear separation of concerns, upload-first dashboard flow, and a disease-prediction page driven by pickle model assets.
+Build a beginner-friendly Streamlit Bio Explorer app with clear separation of concerns, upload-first dashboard flow, disease prediction, and K-Means cluster matching from symptom checklists.
 
 ## Current Status
 - Virtual environment `venv` exists.
-- Dependencies include `streamlit`, `pandas`, `numpy`, `matplotlib`, `seaborn`, and pinned `scikit-learn==1.6.1` (plus `joblib`, `scipy`).
-- `app.py` only orchestrates pages.
+- Lean Cloud-friendly `requirements.txt` (sklearn `>=1.7.2` for Python 3.14 wheels).
+- `app.py` only orchestrates top-level pages.
 - Pages:
   - `Dashboard` (CSV explore / plots)
-  - `Disease Prediction` (symptom checklist → disease probabilities)
-- Default model assets copied to:
+  - `Disease Prediction` with sub-tabs: **Predict** | **Clusters**
+- Classifier assets:
   - `models/model.pkl`
   - `models/symptoms.pkl`
   - `models/model_metadata.pkl`
-- Original root pickles still present (`disease_model.pkl`, `symptom_columns.pkl`, `model_metadata.pkl`).
-- Prediction verification tests pass: `python -m unittest tests.test_prediction -v`
+- K-Means assets:
+  - `models/kmeans_model.pkl` (8 clusters, 132 features)
+  - `models/cluster_metadata.pkl` (sizes + summaries)
+  - `models/cluster_symptom_columns.pkl` (same order as `symptoms.pkl`)
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster -v`
 
 ## Architecture (Current)
 
 ### 1) App-level orchestration
 - **File:** `app.py`
-- **Responsibility:** Route/orchestrate between pages only.
-- **Navigation:** Top segmented control for `Dashboard` and `Disease Prediction` (exclusive page render)
-- **Page config:** `st.set_page_config` is called once in `app.py`
+- **Navigation:** Exclusive top `st.segmented_control` for `Dashboard` / `Disease Prediction`
+- **Page config:** `st.set_page_config` once in `app.py`
 
 ### 2) Dashboard page
 - **File:** `app_pages/dashboard_page.py`
-- Uses `dashboard/data_service.py`, `dashboard/ui_view.py`, `dashboard/plots_view.py`
 - Upload-first CSV explorer with count plot, scatter, correlation matrix
 - Plot sizes capped to avoid Pillow decompression bomb errors
+- Use `return` (not `st.stop()`) for early exits
 
 ### 3) Disease Prediction page
 - **File:** `app_pages/prediction_page.py`
-- Coordinates prediction UI + controller flow
+- Shared symptom checklist above sub-tabs
+- Sub-tabs:
+  - **Predict** — logistic regression disease probabilities
+  - **Clusters** — K-Means assign / browse / compare
 
 ### 4) Prediction package (`prediction/`)
-Core entities requested by product requirements:
 
-| Entity | File | Responsibility |
+| Piece | File | Responsibility |
 |---|---|---|
-| DiseasePredictionController | `prediction/controller.py` | Validate request, build features, call model, build result |
-| Symptoms | `prediction/symptoms.py` | Load expandable symptom names from pickle; build binary feature vector |
-| Model | loaded via loader | LogisticRegression from `models/model.pkl` (joblib) |
-| PredictionRequest | `prediction/prediction_request.py` | Selected symptom list |
-| PredictionResult | `prediction/prediction_result.py` | Top disease, confidence, top-N ranked probs, low-confidence flag |
-| ModelLoader | `prediction/model_loader.py` | Load model/symptoms/metadata from default paths or uploads |
-| User Interface | `prediction/ui_view.py` | Checklist, uploaders, result rendering |
+| DiseasePredictionController | `controller.py` | Disease predict_proba flow |
+| ClusterController | `cluster_controller.py` | Assign / browse / compare clusters |
+| Symptoms | `symptoms.py` | Load feature names; binary feature vector |
+| PredictionRequest | `prediction_request.py` | Selected symptom list (shared) |
+| PredictionResult | `prediction_result.py` | Disease prediction output |
+| Cluster result types | `cluster_result.py` | Assignment, summary, comparison |
+| ModelLoader | `model_loader.py` | joblib/pickle loading |
+| UI | `ui_view.py` | Checklist, predict UI, cluster UI |
 
-## Disease Prediction Behavior
-- Symptoms loaded from pickle (not hardcoded); currently 132 features.
-- Multi-select checklist.
-- Feature vector: ordered binary vector matching `symptoms.pkl`.
-- Prediction uses `predict_proba`.
-- Shows:
-  - Top-1 most likely disease
-  - Top-N ranked probabilities where **N = 3**
-- Low-confidence flag when top probability **< 0.50**
-- Empty selection error: user must select at least one symptom
-- Defaults from `models/`; optional uploaders can override model/symptoms/metadata
+## Disease Predict Behavior
+- Binary feature vector from checklist order
+- Top-1 disease + Top-3 probabilities
+- Low-confidence flag if top probability **< 0.50**
+- Empty selection → error message
+
+## Cluster Behavior
+- Confidence: **softmax of inverse distances** to centroids (C1)
+- UI: **Predict | Clusters** sub-tabs (D3)
+- Assign shows: cluster id, confidence, top symptoms, common diseases
+- Browse: pick any cluster 0–7
+- Compare: two clusters side-by-side + shared top symptoms/diseases
+- Top items: up to 5, scores `> 0` only
+- Empty selection on assign → same style error as disease predict
 
 ## Decisions Locked In
-- Confidence threshold: **0.50**
-- Ranked display: **Top-1 + Top-3**
-- Default assets: copy into `models/` (`C1`)
-- sklearn pin for local training compatibility was `1.6.1`, but Cloud on Python 3.14 needs `>=1.7.2` (has binary wheels). Model still loads under newer sklearn.
+- Disease confidence threshold: **0.50**
+- Disease ranked display: **Top-1 + Top-3**
+- Cluster confidence: **softmax(inverse distance)**
+- Cluster UI: **sub-tabs on Disease Prediction page**
+- Cloud: prefer Python **3.12** in Streamlit Advanced settings; `runtime.txt` is ignored
 
 ## How To Run
 ```bash
@@ -72,25 +81,15 @@ source venv/bin/activate
 streamlit run app.py
 ```
 
-## How To Verify Prediction Logic
+## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction -v
+python -m unittest tests.test_prediction tests.test_cluster -v
 ```
 
 ## Notes For Next Agent
-- Keep `app.py` thin (page orchestration only).
-- Top navigation uses exclusive `st.segmented_control` (not `st.tabs`) so only the active page runs.
-- `requirements.txt` is intentionally lean for Streamlit Community Cloud; do not re-freeze local Python 3.14 macOS pins.
-- On Streamlit Cloud, set Python to **3.12** (or 3.11) in app Advanced settings; `runtime.txt` is ignored by Community Cloud.
-- Page modules live in `app_pages/` (not Streamlit's reserved `pages/` folder) so automatic multipage sidebar links are not shown.
-- Important: page modules must use `return` (not `st.stop()`) for early exits.
-- Do not hardcode symptom names; always load from symptoms pickle.
-- Keep prediction business logic in `prediction/`, UI in `prediction/ui_view.py`, page wiring in `app_pages/prediction_page.py`.
-- Medical disclaimer remains important: this is not a clinical diagnosis tool.
-- Avoid unbounded matplotlib figure sizes on dashboard plots.
-
-## Suggested Next Steps
-1. Add medical disclaimer emphasis / clinician-referral copy if product requires it.
-2. Optionally add search/filter for long symptom checklist UX.
-3. Commit current work once ready.
+- Keep `app.py` thin.
+- Do not hardcode symptom/disease/cluster labels; load from pickles/metadata.
+- Reuse `PredictionRequest` + `Symptoms.to_feature_vector()` for both predict and cluster assign.
+- Page modules live in `app_pages/` (not Streamlit’s reserved `pages/`).
+- Medical disclaimer: not a clinical diagnosis tool.
