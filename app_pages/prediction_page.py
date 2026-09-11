@@ -1,5 +1,6 @@
 import streamlit as st
 
+from assistant.ui_view import render_assistant_panel
 from prediction.cluster_controller import ClusterController
 from prediction.controller import DiseasePredictionController
 from prediction.ui_view import (
@@ -44,6 +45,7 @@ def render() -> None:
         )
 
     selected_symptoms = render_symptom_checklist(symptoms.names)
+    st.session_state.selected_symptoms = selected_symptoms
     st.write(f"Selected symptoms: {len(selected_symptoms)}")
 
     predict_tab, clusters_tab = st.tabs(["Predict", "Clusters"])
@@ -53,9 +55,15 @@ def render() -> None:
             try:
                 controller = DiseasePredictionController(model=model, symptoms=symptoms)
                 result = run_prediction(controller, selected_symptoms)
+                st.session_state.latest_prediction = result
                 render_prediction_result(result)
             except ValueError as error:
                 st.error(str(error))
+        elif st.session_state.get("latest_prediction") is not None:
+            render_prediction_result(st.session_state.latest_prediction)
+
+        if st.session_state.get("latest_prediction") is not None:
+            st.caption("Ask follow-up questions in **Ask AI about your results** below.")
 
     with clusters_tab:
         try:
@@ -82,11 +90,20 @@ def render() -> None:
         if render_assign_cluster_button():
             try:
                 assignment = run_cluster_assignment(cluster_controller, selected_symptoms)
+                st.session_state.latest_cluster_assignment = assignment
                 render_cluster_assignment_result(assignment)
             except ValueError as error:
                 st.error(str(error))
+        elif st.session_state.get("latest_cluster_assignment") is not None:
+            render_cluster_assignment_result(st.session_state.latest_cluster_assignment)
+
+        if st.session_state.get("latest_cluster_assignment") is not None:
+            st.caption("Ask follow-up questions in **Ask AI about your results** below.")
 
         st.divider()
         render_cluster_browse(cluster_controller)
         st.divider()
         render_cluster_compare(cluster_controller)
+
+    st.divider()
+    render_assistant_panel()

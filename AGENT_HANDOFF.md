@@ -7,18 +7,10 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Virtual environment `venv` exists.
 - Lean Cloud-friendly `requirements.txt` (sklearn `>=1.7.2` for Python 3.14 wheels).
 - `app.py` only orchestrates top-level pages.
-- Pages:
-  - `Dashboard` (CSV explore / plots)
-  - `Disease Prediction` with sub-tabs: **Predict** | **Clusters**
-- Classifier assets:
-  - `models/model.pkl`
-  - `models/symptoms.pkl`
-  - `models/model_metadata.pkl`
-- K-Means assets:
-  - `models/kmeans_model.pkl` (8 clusters, 132 features)
-  - `models/cluster_metadata.pkl` (sizes + summaries)
-  - `models/cluster_symptom_columns.pkl` (same order as `symptoms.pkl`)
-- Tests: `python -m unittest tests.test_prediction tests.test_cluster -v`
+- Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
+- Groq-powered assistant (`assistant/`) explains ML outputs only
+- Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant -v`
 
 ## Architecture (Current)
 
@@ -39,6 +31,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Sub-tabs:
   - **Predict** — logistic regression disease probabilities
   - **Clusters** — K-Means assign / browse / compare
+- Below both tabs: **Ask AI about your results** (requires Predict and/or Cluster result first)
 
 ### 4) Prediction package (`prediction/`)
 
@@ -52,6 +45,32 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 | Cluster result types | `cluster_result.py` | Assignment, summary, comparison |
 | ModelLoader | `model_loader.py` | joblib/pickle loading |
 | UI | `ui_view.py` | Checklist, predict UI, cluster UI |
+
+### 5) AI assistant package (`assistant/`)
+
+| Entity | File | Responsibility |
+|---|---|---|
+| AIQuery | `ai_query.py` | User question |
+| PatientAnalysisContext | `patient_analysis_context.py` | Symptoms + prediction + cluster payload |
+| ChatMessage | `chat_message.py` | Chat turn |
+| AIResponse | `ai_response.py` | Answer / refusal / suggestions |
+| LLMClient | `llm_client.py` | Groq Python SDK chat completions |
+| PromptBuilder | `prompt_builder.py` | System + grounded context prompt |
+| SafetyGuard | `safety_guard.py` | Block diagnosis-outside-pipeline / unrelated Qs |
+| ConversationManager | `conversation_manager.py` | Session chat history |
+| AIResultAssistant | `ai_result_assistant.py` | Orchestrates ask flow |
+| UI | `ui_view.py` | Chat panel + suggested questions |
+
+## Ask AI Behavior
+- Uses Groq model `llama-3.1-8b-instant` by default
+- Requires at least one of: disease prediction result, cluster assignment result
+- Suggested questions:
+  - Why was this disease predicted?
+  - Why am I in this cluster?
+  - What does confidence mean?
+  - How is my symptom profile similar to this cluster?
+- Refuses independent diagnosis / unrelated topics
+- API key from `.streamlit/secrets.toml` → `GROQ_API_KEY`
 
 ## Disease Predict Behavior
 - Binary feature vector from checklist order
@@ -84,8 +103,16 @@ streamlit run app.py
 ## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction tests.test_cluster -v
+python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant -v
 ```
+
+## Groq setup
+1. Put your key in `.streamlit/secrets.toml`:
+   ```toml
+   GROQ_API_KEY = "your_real_key"
+   ```
+2. Example template: `.streamlit/secrets.toml.example`
+3. For Streamlit Cloud, add the same secret in the app settings.
 
 ## Notes For Next Agent
 - Keep `app.py` thin.
