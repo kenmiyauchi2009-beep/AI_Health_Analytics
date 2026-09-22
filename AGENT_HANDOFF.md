@@ -62,7 +62,8 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 | UI | `ui_view.py` | Chat panel + suggested questions |
 
 ## Ask AI Behavior
-- Uses Groq model `llama-3.1-8b-instant` by default
+- Uses Groq model `openai/gpt-oss-20b` by default (`llama-3.1-8b-instant` retired for free/dev)
+- Optional override: `GROQ_MODEL` in `.streamlit/secrets.toml`
 - Requires at least one of: disease prediction result, cluster assignment result
 - Suggested questions:
   - Why was this disease predicted?

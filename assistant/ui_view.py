@@ -20,6 +20,16 @@ def _get_groq_api_key() -> str | None:
     return str(key).strip() or None
 
 
+def _get_groq_model() -> str:
+    try:
+        model = st.secrets.get("GROQ_MODEL")
+    except Exception:
+        model = None
+    if model is None or not str(model).strip():
+        return LLMClient.DEFAULT_MODEL
+    return str(model).strip()
+
+
 def _get_conversation() -> ConversationManager:
     if "ai_conversation" not in st.session_state:
         st.session_state.ai_conversation = ConversationManager()
@@ -78,7 +88,7 @@ def render_assistant_panel() -> None:
 
     try:
         assistant = AIResultAssistant(
-            llm_client=LLMClient(api_key=api_key),
+            llm_client=LLMClient(api_key=api_key, model=_get_groq_model()),
             conversation=conversation,
         )
         response = assistant.ask(AIQuery(text=question), context)

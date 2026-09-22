@@ -6,7 +6,8 @@ from typing import Any
 class LLMClient:
     """Thin Groq Chat Completions client."""
 
-    DEFAULT_MODEL = "llama-3.1-8b-instant"
+    # llama-3.1-8b-instant was retired for free/developer tiers (Aug 2026).
+    DEFAULT_MODEL = "openai/gpt-oss-20b"
 
     def __init__(self, api_key: str, model: str = DEFAULT_MODEL) -> None:
         if not api_key or not api_key.strip():
@@ -21,7 +22,7 @@ class LLMClient:
             ) from error
 
         self._client = Groq(api_key=api_key.strip())
-        self.model = model
+        self.model = (model or self.DEFAULT_MODEL).strip()
 
     def complete(self, messages: list[dict[str, str]]) -> str:
         response: Any = self._client.chat.completions.create(
