@@ -1,6 +1,10 @@
 import streamlit as st
 
-from app_pages.dashboard_page import render as render_dashboard_page
+from app_pages.dashboard_page import (
+    get_user_role,
+    render as render_dashboard_page,
+    render_doctor_dashboard,
+)
 from app_pages.prediction_page import render as render_prediction_page
 from app_pages.registration_page import render_auth_gate
 
@@ -16,6 +20,13 @@ def main() -> None:
 
     if st.session_state.get("authenticated_user") is None:
         render_auth_gate()
+        return
+
+    user_role = get_user_role(st.session_state.authenticated_user)
+    st.caption(f"Debug: detected role = {user_role}")
+    if user_role.lower() == "doctor":
+        st.caption("Debug: rendering doctor dashboard")
+        render_doctor_dashboard()
         return
 
     if "active_page" not in st.session_state:

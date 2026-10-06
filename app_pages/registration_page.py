@@ -115,6 +115,23 @@ def get_users_collection():
     return db.users
 
 
+def normalize_user_record(user: dict | None) -> dict | None:
+    """Ensure every authenticated record has a normalized role string for routing and UI checks."""
+    if not isinstance(user, dict):
+        return user
+
+    role_value = str(user.get("role") or user.get("user_type") or "").strip()
+    if role_value:
+        normalized_role = role_value.capitalize()
+    elif user.get("speciality") or user.get("medical_license_number") or user.get("clinic_or_hospital"):
+        normalized_role = "Doctor"
+    else:
+        normalized_role = "Patient"
+
+    user["role"] = normalized_role
+    return user
+
+
 def authenticate_user(email: str, password: str, users_collection) -> dict | None:
     """Authenticate a user by email and bcrypt-hashed password."""
     if users_collection is None:
@@ -134,17 +151,31 @@ def authenticate_user(email: str, password: str, users_collection) -> dict | Non
 
     try:
         if bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8")):
-            return user
+            return normalize_user_record(user)
     except (TypeError, ValueError):
         return None
 
     return None
 
 
+def get_registration_wizard_state() -> dict[str, str]:
+    """Return the active registration wizard step and selected role."""
+    step = st.session_state.get("registration_step", "role")
+    role = st.session_state.get("registration_role", "Patient")
+    if step not in {"role", "details"}:
+        step = "role"
+    return {"step": step, "role": role}
+
+
 def render_signup_form() -> None:
     """Render the sign-up form used as the app landing registration page."""
     st.title("Create your account")
     st.caption("This registration page acts as the signup form for new users.")
+
+    if "registration_step" not in st.session_state:
+        st.session_state.registration_step = "role"
+    if "registration_role" not in st.session_state:
+        st.session_state.registration_role = "Patient"
 
     users_collection = get_users_collection()
     if users_collection is None:
@@ -153,8 +184,26 @@ def render_signup_form() -> None:
         )
         return
 
-    role = st.selectbox("User type", ["Patient", "Doctor"], index=0)
+    state = get_registration_wizard_state()
+    role = state["role"]
+    step = state["step"]
 
+    if step == "role":
+        st.selectbox(
+            "Role of the User",
+            ["Patient", "Doctor"],
+            index=["Patient", "Doctor"].index(role),
+            key="registration_role",
+        )
+
+        col_next, _ = st.columns([1, 1])
+        with col_next:
+            if st.button("Next"):
+                st.session_state.registration_step = "details"
+                st.rerun()
+        return
+
+    st.subheader(f"{role} details")
     first_name = st.text_input("First Name")
     last_name = st.text_input("Last Name")
     email = st.text_input("Email")
@@ -177,62 +226,70 @@ def render_signup_form() -> None:
         yoe = st.number_input("YOE", min_value=0, max_value=80, step=1)
         clinic_or_hospital = st.text_input("Clinic / Hospital")
 
-    if st.button("Create account"):
-        payload = {
-            "role": role,
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": email,
-            "password": password,
-            "confirm_password": confirm_password,
-            "phone_number": phone_number,
-            "date_of_birth": str(date_of_birth) if date_of_birth is not None else "",
-            "address": address,
-            "medical_license_number": medical_license_number,
-            "speciality": speciality,
-            "yoe": int(yoe),
-            "clinic_or_hospital": clinic_or_hospital,
-        }
+    col_back, col_submit = st.columns([1, 2])
+    with col_back:
+        if st.button("Previous"):
+            st.session_state.registration_step = "role"
+            st.rerun()
+    with col_submit:
+        if st.button("Create account"):
+            payload = {
+                "role": role,
+                "first_name": first_name,
+                "last_name": last_name,
+                "email": email,
+                "password": password,
+                "confirm_password": confirm_password,
+                "phone_number": phone_number,
+                "date_of_birth": str(date_of_birth) if date_of_birth is not None else "",
+                "address": address,
+                "medical_license_number": medical_license_number,
+                "speciality": speciality,
+                "yoe": int(yoe),
+                "clinic_or_hospital": clinic_or_hospital,
+            }
 
-        def email_exists(normalized_email: str) -> bool:
-            return users_collection.find_one({"email": normalized_email}) is not None
+            def email_exists(normalized_email: str) -> bool:
+                return users_collection.find_one({"email": normalized_email}) is not None
 
-        errors = validate_registration(payload, email_exists)
-        if errors:
-            for error in errors:
-                st.error(error)
-            return
+            errors = validate_registration(payload, email_exists)
+            if errors:
+                for error in errors:
+                    st.error(error)
+                return
 
-        password_hash = hash_password(password)
-        document = {
-            "role": role,
-            "first_name": first_name.strip(),
-            "last_name": last_name.strip(),
-            "email": email.strip().lower(),
-            "phone_number": phone_number.strip() if phone_number.strip() else None,
-            "password_hash": password_hash,
-        }
+            password_hash = hash_password(password)
+            document = {
+                "role": role,
+                "first_name": first_name.strip(),
+                "last_name": last_name.strip(),
+                "email": email.strip().lower(),
+                "phone_number": phone_number.strip() if phone_number.strip() else None,
+                "password_hash": password_hash,
+            }
 
-        if role == "Patient":
-            document.update({"date_of_birth": str(date_of_birth), "address": address.strip()})
-        else:
-            document.update(
-                {
-                    "medical_license_number": medical_license_number.strip(),
-                    "speciality": speciality.strip(),
-                    "yoe": int(yoe),
-                    "clinic_or_hospital": clinic_or_hospital.strip(),
-                }
-            )
+            if role == "Patient":
+                document.update({"date_of_birth": str(date_of_birth), "address": address.strip()})
+            else:
+                document.update(
+                    {
+                        "medical_license_number": medical_license_number.strip(),
+                        "speciality": speciality.strip(),
+                        "yoe": int(yoe),
+                        "clinic_or_hospital": clinic_or_hospital.strip(),
+                    }
+                )
 
-        try:
-            users_collection.insert_one(document)
-            st.success(f"{role} account created successfully. You can now log in.")
-            st.session_state["auth_mode"] = "login"
-        except errors.DuplicateKeyError:
-            st.error("Email must be unique.")
-        except Exception as exc:  # pragma: no cover - UI safeguard only
-            st.error(f"Registration failed: {exc}")
+            try:
+                users_collection.insert_one(document)
+                st.success(f"{role} account created successfully. You can now log in.")
+                st.session_state["auth_mode"] = "login"
+                st.session_state.registration_step = "role"
+                st.session_state.registration_role = "Patient"
+            except errors.DuplicateKeyError:
+                st.error("Email must be unique.")
+            except Exception as exc:  # pragma: no cover - UI safeguard only
+                st.error(f"Registration failed: {exc}")
 
 
 def render_auth_gate() -> None:
@@ -262,6 +319,7 @@ def render_auth_gate() -> None:
                 st.error("Invalid email or password.")
                 return
 
+            user = normalize_user_record(user)
             st.session_state["authenticated_user"] = user
             st.session_state["active_page"] = "Dashboard"
             st.rerun()

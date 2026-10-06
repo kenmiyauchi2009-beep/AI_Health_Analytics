@@ -1,6 +1,15 @@
 import unittest
 
-from app_pages.registration_page import authenticate_user, hash_password, validate_registration
+import streamlit as st
+
+from app_pages.dashboard_page import get_user_role
+from app_pages.registration_page import (
+    authenticate_user,
+    get_registration_wizard_state,
+    hash_password,
+    normalize_user_record,
+    validate_registration,
+)
 
 
 class RegistrationValidationTests(unittest.TestCase):
@@ -83,6 +92,26 @@ class RegistrationValidationTests(unittest.TestCase):
         self.assertIn("Medical License Number is required.", errors)
         self.assertIn("Speciality is required.", errors)
         self.assertIn("Clinic / Hospital is required.", errors)
+
+    def test_registration_wizard_starts_on_role_selection(self):
+        st.session_state["registration_step"] = "role"
+        st.session_state["registration_role"] = "Doctor"
+
+        state = get_registration_wizard_state()
+
+        self.assertEqual(state["step"], "role")
+        self.assertEqual(state["role"], "Doctor")
+
+    def test_doctor_role_detection_handles_legacy_record_values(self):
+        self.assertEqual(get_user_role({"role": "Doctor"}), "Doctor")
+        self.assertEqual(get_user_role({"speciality": "Cardiology"}), "Doctor")
+        self.assertEqual(get_user_role({"role": "doctor"}), "Doctor")
+
+    def test_normalize_user_record_sets_doctor_role_when_missing(self):
+        user = {"email": "doctor@example.com", "speciality": "Cardiology"}
+        normalized = normalize_user_record(user)
+
+        self.assertEqual(normalized["role"], "Doctor")
 
     def test_hash_password_is_not_plaintext(self):
         password_hash = hash_password("Secret123!")
