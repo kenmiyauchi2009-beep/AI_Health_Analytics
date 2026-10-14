@@ -111,11 +111,14 @@ def validate_registration(form_data: dict, email_exists) -> list[str]:
     elif role == "Doctor":
         medical_license_number = str(form_data.get("medical_license_number") or "").strip()
         speciality = str(form_data.get("speciality") or "").strip()
+        degree = str(form_data.get("degree") or "").strip()
         clinic_or_hospital = str(form_data.get("clinic_or_hospital") or "").strip()
         if not medical_license_number:
             errors.append("Medical License Number is required.")
         if not speciality:
             errors.append("Speciality is required.")
+        if not degree:
+            errors.append("Degree is required.")
         if not clinic_or_hospital:
             errors.append("Clinic / Hospital is required.")
 
@@ -352,6 +355,7 @@ def render_signup_form() -> None:
         address = st.text_area("Address")
         medical_license_number = ""
         speciality = ""
+        degree = ""
         yoe = 0
         clinic_or_hospital = ""
     else:
@@ -359,6 +363,7 @@ def render_signup_form() -> None:
         address = ""
         medical_license_number = st.text_input("Medical License Number")
         speciality = st.text_input("Speciality")
+        degree = st.text_input("Degree", placeholder="e.g. MBBS, MD")
         yoe = st.number_input("YOE", min_value=0, max_value=80, step=1)
         clinic_or_hospital = st.text_input("Clinic / Hospital")
 
@@ -390,6 +395,7 @@ def render_signup_form() -> None:
                 "address": address,
                 "medical_license_number": medical_license_number,
                 "speciality": speciality,
+                "degree": degree,
                 "yoe": int(yoe),
                 "clinic_or_hospital": clinic_or_hospital,
             }
@@ -420,6 +426,7 @@ def render_signup_form() -> None:
                     {
                         "medical_license_number": medical_license_number.strip(),
                         "speciality": speciality.strip(),
+                        "degree": degree.strip(),
                         "yoe": int(yoe),
                         "clinic_or_hospital": clinic_or_hospital.strip(),
                     }

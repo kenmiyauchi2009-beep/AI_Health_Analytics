@@ -1,12 +1,11 @@
 import streamlit as st
 
+from app_pages.practitioner_service import REQUEST_TYPE_CHANGE, respond_to_practitioner_request
 from app_pages.registration_page import (
-    create_patient_doctor_request,
     get_accepted_doctor_requests,
     get_pending_doctor_requests,
+    get_requests_collection,
     get_users_collection,
-    normalize_user_record,
-    update_doctor_request_status,
 )
 from dashboard.data_service import apply_categorical_filter, detect_columns, load_uploaded_csv
 from dashboard.plots_view import (
@@ -71,6 +70,7 @@ def _get_doctor_context() -> tuple[str, str, list[dict], list[dict]]:
                 "email": request.get("patient_email") or "",
                 "note": request.get("note") or "",
                 "requested_time": requested_time,
+                "is_change": request.get("request_type") == REQUEST_TYPE_CHANGE,
             }
         )
 
@@ -85,6 +85,20 @@ def _get_doctor_context() -> tuple[str, str, list[dict], list[dict]]:
         )
 
     return doctor_name, speciality, display_requests, my_patients
+
+
+def _respond_to_request(request_id, *, accept: bool) -> None:
+    """Accept or decline a patient's Primary Health Practitioner request, then refresh."""
+    users_collection = get_users_collection()
+    user = st.session_state.get("authenticated_user") or {}
+    respond_to_practitioner_request(
+        users_collection,
+        get_requests_collection(),
+        request_id,
+        user.get("email"),
+        accept=accept,
+    )
+    st.rerun()
 
 
 def render_doctor_dashboard() -> None:
@@ -103,7 +117,7 @@ def render_doctor_dashboard() -> None:
         st.metric("Active Cases", len(my_patients))
 
     st.markdown("---")
-    st.subheader("Patient Requests")
+    st.subheader("Primary Health Practitioner Requests")
     if not patient_requests:
         st.info("There are no pending patient connection requests at the moment.")
     else:
@@ -115,16 +129,16 @@ def render_doctor_dashboard() -> None:
                 if request.get("note"):
                     st.write(f"**Note:** {request['note']}")
                 st.write(f"**Requested Time:** {request['requested_time']}")
+                if request["is_change"]:
+                    st.caption("This patient wants to switch to you from their current Primary Health Practitioner.")
 
                 request_actions = st.columns([1, 1])
                 with request_actions[0]:
                     if st.button("Accept", key=f"accept_request_{request['_id']}_{index}"):
-                        update_doctor_request_status(request["_id"], "accepted")
-                        st.rerun()
+                        _respond_to_request(request["_id"], accept=True)
                 with request_actions[1]:
                     if st.button("Decline", key=f"decline_request_{request['_id']}_{index}"):
-                        update_doctor_request_status(request["_id"], "declined")
-                        st.rerun()
+                        _respond_to_request(request["_id"], accept=False)
 
                 st.markdown("---")
 
@@ -142,50 +156,6 @@ def render_doctor_dashboard() -> None:
                 if st.button("View Patient", key=f"view_patient_{patient_index}"):
                     st.info(f"Opening profile for {patient['name']}")
                 st.markdown("---")
-
-
-def render_patient_doctor_request_form() -> None:
-    """Allow a patient to submit a real doctor access request, persisted to MongoDB."""
-    user = st.session_state.get("authenticated_user") or {}
-    if get_user_role(user) != "Patient":
-        return
-
-    users_collection = get_users_collection()
-    if users_collection is None:
-        return
-
-    doctors = []
-    for record in users_collection.find({}):
-        normalized = normalize_user_record(dict(record))
-        if normalized and normalized.get("role") == "Doctor":
-            doctors.append(normalized)
-
-    if not doctors:
-        st.info("No doctors are registered yet. Once a doctor account exists, you can request access here.")
-        return
-
-    doctor_options = {}
-    for doctor in doctors:
-        doctor_name = (
-            f"{str(doctor.get('first_name') or '').strip()} {str(doctor.get('last_name') or '').strip()}"
-        ).strip() or str(doctor.get("email") or "Doctor")
-        doctor_options[doctor_name] = doctor.get("email")
-
-    selected_doctor_name = st.selectbox("Request access from a doctor", list(doctor_options.keys()))
-    note = st.text_area("Optional note", placeholder="Tell the doctor why you are requesting a follow-up.")
-
-    if st.button("Send doctor request"):
-        doctor_email = doctor_options.get(selected_doctor_name)
-        if not doctor_email:
-            st.error("Please choose a valid doctor.")
-            return
-
-        request = create_patient_doctor_request(user, doctor_email, note)
-        if request is None:
-            st.warning("You already have a pending request with this doctor, or the request could not be saved.")
-            return
-
-        st.success(f"Your request to {selected_doctor_name} was sent successfully.")
 
 
 def render_patient_dashboard() -> None:
@@ -227,10 +197,6 @@ def render_patient_dashboard() -> None:
         render_count_plot(filtered_df, selected_cat_col)
         render_scatter_plot(filtered_df, selected_x_col, selected_y_col)
         render_correlation_matrix(filtered_df, numeric_cols)
-
-    st.markdown("---")
-    st.subheader("Doctor Requests")
-    render_patient_doctor_request_form()
 
 
 def render() -> None:

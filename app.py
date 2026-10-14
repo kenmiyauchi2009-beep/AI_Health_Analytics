@@ -5,10 +5,16 @@ from app_pages.dashboard_page import (
     render as render_dashboard_page,
     render_doctor_dashboard,
 )
+from app_pages.practitioner_page import (
+    get_tab_label as get_practitioner_tab_label,
+    render as render_practitioner_page,
+    render_practitioner_notifications,
+)
 from app_pages.prediction_page import render as render_prediction_page
 from app_pages.registration_page import render_auth_gate
 
-PAGE_OPTIONS = ["Dashboard", "Disease Prediction"]
+PRACTITIONER_PAGE = "Primary Health Practitioner"
+PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE]
 
 
 def main() -> None:
@@ -29,7 +35,7 @@ def main() -> None:
         render_doctor_dashboard()
         return
 
-    if "active_page" not in st.session_state:
+    if st.session_state.get("active_page") not in PAGE_OPTIONS:
         st.session_state.active_page = PAGE_OPTIONS[0]
 
     with st.sidebar:
@@ -39,9 +45,15 @@ def main() -> None:
             st.session_state.pop("active_page", None)
             st.rerun()
 
+    render_practitioner_notifications()
+
+    # The PHP tab label changes once the patient has a practitioner, so keep a
+    # stable option value and only vary what is displayed.
+    practitioner_label = get_practitioner_tab_label()
     selected_page = st.segmented_control(
         "Navigation",
         options=PAGE_OPTIONS,
+        format_func=lambda page: practitioner_label if page == PRACTITIONER_PAGE else page,
         key="active_page",
         label_visibility="collapsed",
     )
@@ -50,6 +62,8 @@ def main() -> None:
 
     if selected_page == "Disease Prediction":
         render_prediction_page()
+    elif selected_page == PRACTITIONER_PAGE:
+        render_practitioner_page()
     else:
         render_dashboard_page()
 

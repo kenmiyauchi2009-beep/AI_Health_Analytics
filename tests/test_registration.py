@@ -92,6 +92,7 @@ class RegistrationValidationTests(unittest.TestCase):
 
         self.assertIn("Medical License Number is required.", errors)
         self.assertIn("Speciality is required.", errors)
+        self.assertIn("Degree is required.", errors)
         self.assertIn("Clinic / Hospital is required.", errors)
 
     def test_registration_wizard_starts_on_role_selection(self):
