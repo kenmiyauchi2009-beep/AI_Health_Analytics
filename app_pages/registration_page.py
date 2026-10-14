@@ -313,16 +313,19 @@ def render_signup_form() -> None:
     step = state["step"]
 
     if step == "role":
+        # Use a separate widget key: Streamlit drops widget-owned keys once the widget
+        # stops rendering, which would reset "registration_role" on the details step.
         selected_role_choice = st.selectbox(
             "Role of the User",
             ["Patient", "Doctor"],
-            index=["Patient", "Doctor"].index(role),
-            key="registration_role",
+            index=["Patient", "Doctor"].index(normalize_registration_role(role)),
+            key="registration_role_choice",
         )
 
         col_next, _ = st.columns([1, 1])
         with col_next:
             if st.button("Next"):
+                st.session_state.registration_role = normalize_registration_role(selected_role_choice)
                 st.session_state.registration_step = "details"
                 st.rerun()
         return
