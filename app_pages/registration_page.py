@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from pathlib import Path
 import tomllib
 
@@ -51,10 +52,33 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
+def normalize_registration_role(role_value: str | None, *, doctor_fields: dict | None = None) -> str:
+    """Normalize the selected registration role before storing it in MongoDB."""
+    if doctor_fields and any(
+        str(doctor_fields.get(field) or "").strip()
+        for field in ("medical_license_number", "speciality", "clinic_or_hospital")
+    ):
+        return "Doctor"
+
+    role_text = str(role_value or "").strip()
+    normalized = role_text.lower()
+
+    if normalized in {"doctor", "dr", "physician", "clinician", "medical_doctor"}:
+        return "Doctor"
+    if normalized in {"patient", "user", "member"}:
+        return "Patient"
+
+    return "Patient"
+
+
 def validate_registration(form_data: dict, email_exists) -> list[str]:
     """Return validation errors for the user registration form."""
     errors: list[str] = []
-    role = str(form_data.get("role") or "Patient")
+    role = normalize_registration_role(form_data.get("role"), doctor_fields={
+        "medical_license_number": form_data.get("medical_license_number"),
+        "speciality": form_data.get("speciality"),
+        "clinic_or_hospital": form_data.get("clinic_or_hospital"),
+    })
 
     first_name = str(form_data.get("first_name") or "").strip()
     last_name = str(form_data.get("last_name") or "").strip()
@@ -115,21 +139,121 @@ def get_users_collection():
     return db.users
 
 
+def get_requests_collection():
+    """Create the MongoDB collection that stores patient-to-doctor access requests."""
+    users_collection = get_users_collection()
+    if users_collection is None:
+        return None
+
+    requests_collection = users_collection.database["doctor_requests"]
+    requests_collection.create_index([("doctor_email", 1), ("status", 1)])
+    requests_collection.create_index([("patient_email", 1), ("created_at", -1)])
+    return requests_collection
+
+
+def create_patient_doctor_request(patient_user: dict | None, doctor_email: str, note: str = "") -> dict | None:
+    """Persist a real patient request against a doctor in MongoDB."""
+    if not isinstance(patient_user, dict):
+        return None
+
+    collection = get_requests_collection()
+    if collection is None:
+        return None
+
+    normalized_patient_email = str(patient_user.get("email") or "").strip().lower()
+    normalized_doctor_email = str(doctor_email or "").strip().lower()
+    if not normalized_patient_email or not normalized_doctor_email:
+        return None
+
+    if collection.find_one({
+        "patient_email": normalized_patient_email,
+        "doctor_email": normalized_doctor_email,
+        "status": {"$in": ["pending", "accepted"]},
+    }):
+        return None
+
+    patient_name = (
+        f"{str(patient_user.get('first_name') or '').strip()} {str(patient_user.get('last_name') or '').strip()}"
+    ).strip() or normalized_patient_email
+
+    request = {
+        "patient_email": normalized_patient_email,
+        "patient_name": patient_name,
+        "doctor_email": normalized_doctor_email,
+        "note": (note or "").strip(),
+        "status": "pending",
+        "created_at": datetime.utcnow(),
+    }
+    result = collection.insert_one(request)
+    request["_id"] = result.inserted_id
+    return request
+
+
+def get_pending_doctor_requests(doctor_email: str) -> list[dict]:
+    """Return pending requests for a specific doctor."""
+    collection = get_requests_collection()
+    normalized_doctor_email = str(doctor_email or "").strip().lower()
+    if collection is None or not normalized_doctor_email:
+        return []
+    return list(collection.find({"doctor_email": normalized_doctor_email, "status": "pending"}).sort("created_at", -1))
+
+
+def get_accepted_doctor_requests(doctor_email: str) -> list[dict]:
+    """Return accepted patient connections for a specific doctor."""
+    collection = get_requests_collection()
+    normalized_doctor_email = str(doctor_email or "").strip().lower()
+    if collection is None or not normalized_doctor_email:
+        return []
+    return list(collection.find({"doctor_email": normalized_doctor_email, "status": "accepted"}).sort("created_at", -1))
+
+
+def update_doctor_request_status(request_id, status: str) -> bool:
+    """Set the status for a patient request."""
+    collection = get_requests_collection()
+    if collection is None or status not in {"pending", "accepted", "declined"}:
+        return False
+    result = collection.update_one({"_id": request_id}, {"$set": {"status": status, "updated_at": datetime.utcnow()}})
+    return result.matched_count > 0
+
+
 def normalize_user_record(user: dict | None) -> dict | None:
     """Ensure every authenticated record has a normalized role string for routing and UI checks."""
     if not isinstance(user, dict):
         return user
 
     role_value = str(user.get("role") or user.get("user_type") or "").strip()
-    if role_value:
-        normalized_role = role_value.capitalize()
-    elif user.get("speciality") or user.get("medical_license_number") or user.get("clinic_or_hospital"):
+    role_key = role_value.lower()
+    has_doctor_fields = bool(
+        user.get("speciality") or user.get("medical_license_number") or user.get("clinic_or_hospital")
+    )
+
+    if role_key in {"doctor", "dr", "physician", "clinician", "medical_doctor"} or has_doctor_fields:
         normalized_role = "Doctor"
+    elif role_key in {"patient", "user", "member"}:
+        normalized_role = "Patient"
+    elif role_value:
+        normalized_role = role_value.capitalize()
     else:
         normalized_role = "Patient"
 
     user["role"] = normalized_role
     return user
+
+
+def reconcile_user_role_in_db(users_collection, user: dict | None) -> dict | None:
+    """Persist a corrected role back to the database when a document was created with the wrong role."""
+    if users_collection is None or not isinstance(user, dict):
+        return user
+
+    normalized_user = normalize_user_record(dict(user))
+    if not normalized_user:
+        return user
+
+    current_role = str(user.get("role") or "").strip()
+    if current_role != normalized_user.get("role") and hasattr(users_collection, "update_one"):
+        users_collection.update_one({"_id": user.get("_id")}, {"$set": {"role": normalized_user["role"]}})
+
+    return normalized_user
 
 
 def authenticate_user(email: str, password: str, users_collection) -> dict | None:
@@ -151,7 +275,7 @@ def authenticate_user(email: str, password: str, users_collection) -> dict | Non
 
     try:
         if bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8")):
-            return normalize_user_record(user)
+            return reconcile_user_role_in_db(users_collection, user)
     except (TypeError, ValueError):
         return None
 
@@ -189,7 +313,7 @@ def render_signup_form() -> None:
     step = state["step"]
 
     if step == "role":
-        st.selectbox(
+        selected_role_choice = st.selectbox(
             "Role of the User",
             ["Patient", "Doctor"],
             index=["Patient", "Doctor"].index(role),
@@ -211,7 +335,16 @@ def render_signup_form() -> None:
     confirm_password = st.text_input("Confirm Password", type="password")
     phone_number = st.text_input("Phone Number (Optional)")
 
-    if role == "Patient":
+    normalized_form_role = normalize_registration_role(
+        role,
+        doctor_fields={
+            "medical_license_number": "",
+            "speciality": "",
+            "clinic_or_hospital": "",
+        },
+    )
+
+    if normalized_form_role == "Patient":
         date_of_birth = st.date_input("Date of Birth")
         address = st.text_area("Address")
         medical_license_number = ""
@@ -233,8 +366,17 @@ def render_signup_form() -> None:
             st.rerun()
     with col_submit:
         if st.button("Create account"):
+            selected_role_value = st.session_state.get("registration_role") or role
+            selected_role = normalize_registration_role(
+                selected_role_value,
+                doctor_fields={
+                    "medical_license_number": medical_license_number,
+                    "speciality": speciality,
+                    "clinic_or_hospital": clinic_or_hospital,
+                },
+            )
             payload = {
-                "role": role,
+                "role": selected_role,
                 "first_name": first_name,
                 "last_name": last_name,
                 "email": email,
@@ -260,7 +402,7 @@ def render_signup_form() -> None:
 
             password_hash = hash_password(password)
             document = {
-                "role": role,
+                "role": selected_role,
                 "first_name": first_name.strip(),
                 "last_name": last_name.strip(),
                 "email": email.strip().lower(),
@@ -268,7 +410,7 @@ def render_signup_form() -> None:
                 "password_hash": password_hash,
             }
 
-            if role == "Patient":
+            if selected_role == "Patient":
                 document.update({"date_of_birth": str(date_of_birth), "address": address.strip()})
             else:
                 document.update(
@@ -282,7 +424,7 @@ def render_signup_form() -> None:
 
             try:
                 users_collection.insert_one(document)
-                st.success(f"{role} account created successfully. You can now log in.")
+                st.success(f"{selected_role} account created successfully. You can now log in.")
                 st.session_state["auth_mode"] = "login"
                 st.session_state.registration_step = "role"
                 st.session_state.registration_role = "Patient"

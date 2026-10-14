@@ -7,6 +7,7 @@ from app_pages.registration_page import (
     authenticate_user,
     get_registration_wizard_state,
     hash_password,
+    normalize_registration_role,
     normalize_user_record,
     validate_registration,
 )
@@ -106,12 +107,24 @@ class RegistrationValidationTests(unittest.TestCase):
         self.assertEqual(get_user_role({"role": "Doctor"}), "Doctor")
         self.assertEqual(get_user_role({"speciality": "Cardiology"}), "Doctor")
         self.assertEqual(get_user_role({"role": "doctor"}), "Doctor")
+        self.assertEqual(get_user_role({"role": "DR"}), "Doctor")
 
     def test_normalize_user_record_sets_doctor_role_when_missing(self):
         user = {"email": "doctor@example.com", "speciality": "Cardiology"}
         normalized = normalize_user_record(user)
 
         self.assertEqual(normalized["role"], "Doctor")
+
+    def test_normalize_user_record_handles_doctor_aliases(self):
+        self.assertEqual(normalize_user_record({"role": "dr"})["role"], "Doctor")
+        self.assertEqual(normalize_user_record({"role": " physician "})["role"], "Doctor")
+
+    def test_registration_role_is_not_fallen_back_to_patient_for_doctor_accounts(self):
+        self.assertEqual(
+            normalize_registration_role("Patient", doctor_fields={"medical_license_number": "123", "speciality": "Cardiology"}),
+            "Doctor",
+        )
+        self.assertEqual(normalize_registration_role("Doctor", doctor_fields={}), "Doctor")
 
     def test_hash_password_is_not_plaintext(self):
         password_hash = hash_password("Secret123!")

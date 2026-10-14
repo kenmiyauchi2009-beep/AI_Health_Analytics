@@ -24,7 +24,7 @@ def main() -> None:
 
     user_role = get_user_role(st.session_state.authenticated_user)
     st.caption(f"Debug: detected role = {user_role}")
-    if user_role.lower() == "doctor":
+    if user_role == "Doctor":
         st.caption("Debug: rendering doctor dashboard")
         render_doctor_dashboard()
         return
