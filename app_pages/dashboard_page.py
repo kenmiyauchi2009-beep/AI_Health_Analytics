@@ -1,10 +1,6 @@
 import streamlit as st
 
-from app_pages.patient_overview_page import (
-    VIEWING_PATIENT_KEY,
-    open_patient_overview,
-    render as render_patient_overview,
-)
+from app_pages.patient_overview_page import open_patient_overview
 from app_pages.patient_overview_service import calculate_age, get_patient_analyses
 from app_pages.practitioner_service import REQUEST_TYPE_CHANGE, respond_to_practitioner_request
 from app_pages.registration_page import (
@@ -127,11 +123,6 @@ def _respond_to_request(request_id, *, accept: bool) -> None:
 
 def render_doctor_dashboard() -> None:
     """Render the doctor-specific landing workspace and patient management area."""
-    viewing_patient = st.session_state.get(VIEWING_PATIENT_KEY)
-    if viewing_patient:
-        render_patient_overview(viewing_patient)
-        return
-
     doctor_name, speciality, patient_requests, my_patients = _get_doctor_context()
 
     st.title(f'Welcome Doctor "{doctor_name}"')

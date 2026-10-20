@@ -4,24 +4,28 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app_pages.doctor_navigation import (
+    DASHBOARD,
+    PATIENT_OVERVIEW,
+    REVIEW_ANALYSIS,
+    REVIEWING_ANALYSIS_KEY,
+    VIEWING_PATIENT_KEY,
+    go_to,
+)
 from app_pages.patient_overview_service import get_patient_analyses, get_patient_overview, review_analysis
 from app_pages.registration_page import get_analyses_collection, get_requests_collection, get_users_collection
-
-VIEWING_PATIENT_KEY = "viewing_patient_email"
-REVIEWING_ANALYSIS_KEY = "reviewing_analysis_id"
-
 
 def open_patient_overview(patient_email: str) -> None:
     """Switch the doctor workspace to this patient's overview."""
     st.session_state[VIEWING_PATIENT_KEY] = str(patient_email or "").strip().lower()
     st.session_state.pop(REVIEWING_ANALYSIS_KEY, None)
-    st.rerun()
+    go_to(PATIENT_OVERVIEW)
 
 
 def _close_patient_overview() -> None:
     st.session_state.pop(VIEWING_PATIENT_KEY, None)
     st.session_state.pop(REVIEWING_ANALYSIS_KEY, None)
-    st.rerun()
+    go_to(DASHBOARD)
 
 
 def _format_time(value) -> str:
@@ -39,38 +43,6 @@ def _render_profile(patient: dict) -> None:
         st.write(f"**Age:** {patient['age'] if patient['age'] is not None else 'Not provided'}")
         conditions = ", ".join(patient["known_conditions"]) or "None recorded"
         st.write(f"**Known conditions:** {conditions}")
-
-
-def _render_review_panel(analysis: dict, patient_email: str) -> None:
-    st.markdown("**Top predictions**")
-    st.dataframe(
-        [
-            {"Rank": rank, "Disease": item.get("disease"), "Probability": f"{float(item.get('probability') or 0):.1%}"}
-            for rank, item in enumerate(analysis.get("ranked") or [], start=1)
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
-    if analysis.get("is_low_confidence"):
-        st.warning("Low confidence: no disease reached the 50% confidence threshold.")
-
-    notes = st.text_area(
-        "Review notes",
-        value=analysis.get("review_notes") or "",
-        key=f"review_notes_{analysis['_id']}",
-    )
-    save_col, close_col = st.columns([1, 1])
-    with save_col:
-        if st.button("Save review", key=f"save_review_{analysis['_id']}", type="primary"):
-            user = st.session_state.get("authenticated_user") or {}
-            review_analysis(get_analyses_collection(), analysis["_id"], patient_email, user.get("email"), notes)
-            st.session_state.pop(REVIEWING_ANALYSIS_KEY, None)
-            st.session_state["patient_overview_flash"] = "Review saved."
-            st.rerun()
-    with close_col:
-        if st.button("Close", key=f"close_review_{analysis['_id']}"):
-            st.session_state.pop(REVIEWING_ANALYSIS_KEY, None)
-            st.rerun()
 
 
 def _render_analysis(analysis: dict, patient_email: str) -> None:
@@ -92,19 +64,19 @@ def _render_analysis(analysis: dict, patient_email: str) -> None:
         if analysis.get("reviewed") and analysis.get("review_notes"):
             st.write(f"**Review notes:** {analysis['review_notes']}")
 
-        if st.session_state.get(REVIEWING_ANALYSIS_KEY) == analysis_id:
-            _render_review_panel(analysis, patient_email)
-        elif st.button("Review Analysis", key=f"review_analysis_{analysis_id}"):
+        if st.button("Review Analysis", key=f"review_analysis_{analysis_id}"):
+            user = st.session_state.get("authenticated_user") or {}
+            review_analysis(get_analyses_collection(), analysis["_id"], patient_email, user.get("email"))
             st.session_state[REVIEWING_ANALYSIS_KEY] = analysis_id
-            st.rerun()
+            go_to(REVIEW_ANALYSIS)
 
 
-def render(patient_email: str) -> None:
-    """Render the Patient Overview for the signed-in doctor."""
-    if st.button("← Back to dashboard", key="patient_overview_back"):
-        _close_patient_overview()
-
-    st.title("Patient Overview")
+def load_viewed_patient() -> dict | None:
+    """Return the patient picked on the dashboard, or show why it can't be shown."""
+    patient_email = st.session_state.get(VIEWING_PATIENT_KEY)
+    if not patient_email:
+        st.info("No patient is selected. Go back to the dashboard and click **View Patient**.")
+        return None
 
     user = st.session_state.get("authenticated_user") or {}
     patient = get_patient_overview(
@@ -115,12 +87,19 @@ def render(patient_email: str) -> None:
     )
     if patient is None:
         st.error("This patient could not be found, or you are not their Primary Health Practitioner.")
+    return patient
+
+
+def render_page() -> None:
+    """Patient Overview page for the patient picked on the doctor dashboard."""
+    if st.button("← Back to dashboard", key="patient_overview_back"):
+        _close_patient_overview()
+
+    patient = load_viewed_patient()
+    if patient is None:
         return
 
-    flash = st.session_state.pop("patient_overview_flash", None)
-    if flash:
-        st.success(flash)
-
+    st.title("Patient Overview")
     _render_profile(patient)
 
     st.subheader("Analysis History")

@@ -1,10 +1,7 @@
 import streamlit as st
 
-from app_pages.dashboard_page import (
-    get_user_role,
-    render as render_dashboard_page,
-    render_doctor_dashboard,
-)
+from app_pages.dashboard_page import get_user_role, render as render_dashboard_page
+from app_pages.doctor_navigation import doctor_pages
 from app_pages.practitioner_page import (
     get_tab_label as get_practitioner_tab_label,
     render as render_practitioner_page,
@@ -18,23 +15,25 @@ PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE]
 
 
 def main() -> None:
-    """App-level controller: orchestrates navigation across pages."""
+    """App-level controller: picks the pages available to the current user and runs the selected one."""
     st.set_page_config(page_title="DeltaAI Bio Explorer", layout="wide")
 
     if "authenticated_user" not in st.session_state:
         st.session_state.authenticated_user = None
 
     if st.session_state.get("authenticated_user") is None:
-        render_auth_gate()
-        return
+        pages = [st.Page(render_auth_gate, title="Sign in", url_path="sign-in", default=True)]
+    elif get_user_role(st.session_state.authenticated_user) == "Doctor":
+        # Doctors get separate pages: dashboard -> patient overview -> review analysis.
+        pages = list(doctor_pages().values())
+    else:
+        pages = [st.Page(render_patient_app, title="DeltaAI Bio Explorer", url_path="home", default=True)]
 
-    user_role = get_user_role(st.session_state.authenticated_user)
-    st.caption(f"Debug: detected role = {user_role}")
-    if user_role == "Doctor":
-        st.caption("Debug: rendering doctor dashboard")
-        render_doctor_dashboard()
-        return
+    st.navigation(pages, position="hidden").run()
 
+
+def render_patient_app() -> None:
+    """Patient workspace: top navigation across the patient pages."""
     if st.session_state.get("active_page") not in PAGE_OPTIONS:
         st.session_state.active_page = PAGE_OPTIONS[0]
 

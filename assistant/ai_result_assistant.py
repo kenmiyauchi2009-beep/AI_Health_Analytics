@@ -33,7 +33,7 @@ class AIResultAssistant:
                 ),
                 refused=True,
                 refusal_reason="missing_analysis",
-                suggested_questions=SafetyGuard.SUGGESTED_QUESTIONS,
+                suggested_questions=self.safety_guard.SUGGESTED_QUESTIONS,
             )
 
         allowed, reason = self.safety_guard.check(query.text)
@@ -42,7 +42,7 @@ class AIResultAssistant:
                 answer=reason or "I cannot answer that question.",
                 refused=True,
                 refusal_reason="safety",
-                suggested_questions=SafetyGuard.SUGGESTED_QUESTIONS,
+                suggested_questions=self.safety_guard.SUGGESTED_QUESTIONS,
             )
 
         messages = self.prompt_builder.build_messages(
@@ -56,5 +56,5 @@ class AIResultAssistant:
         return AIResponse(
             answer=answer,
             refused=False,
-            suggested_questions=SafetyGuard.SUGGESTED_QUESTIONS,
+            suggested_questions=self.safety_guard.SUGGESTED_QUESTIONS,
         )

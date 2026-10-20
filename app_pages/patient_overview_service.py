@@ -96,18 +96,14 @@ def get_patient_overview(users_collection, requests_collection, doctor_email: st
 
 
 def review_analysis(analyses_collection, analysis_id, patient_email: str, doctor_email: str, notes: str = "") -> bool:
-    """Mark one of the patient's analyses as reviewed by the doctor, with optional notes."""
+    """Mark one of the patient's analyses as reviewed by the doctor; notes are kept unless new ones are given."""
     if analyses_collection is None:
         return False
+    fields = {"reviewed": True, "reviewed_by": _normalize_email(doctor_email), "reviewed_at": datetime.utcnow()}
+    if (notes or "").strip():
+        fields["review_notes"] = notes.strip()
     result = analyses_collection.update_one(
         {"_id": analysis_id, "patient_email": _normalize_email(patient_email)},
-        {
-            "$set": {
-                "reviewed": True,
-                "reviewed_by": _normalize_email(doctor_email),
-                "review_notes": (notes or "").strip(),
-                "reviewed_at": datetime.utcnow(),
-            }
-        },
+        {"$set": fields},
     )
     return result.matched_count > 0

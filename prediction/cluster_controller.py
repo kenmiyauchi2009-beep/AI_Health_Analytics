@@ -82,6 +82,10 @@ class ClusterController:
             shared_diseases=sorted(left_diseases & right_diseases),
         )
 
+    def similarity_scores(self, distances: list[float]) -> list[float]:
+        """Per-cluster similarity (the same scores used for assignment confidence)."""
+        return [float(value) for value in self._softmax_inverse_distances(np.asarray(distances, dtype=float))]
+
     @staticmethod
     def _softmax_inverse_distances(distances: np.ndarray) -> np.ndarray:
         inverse = 1.0 / (distances + 1e-9)

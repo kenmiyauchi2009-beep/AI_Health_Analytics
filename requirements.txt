@@ -1,7 +1,7 @@
 # Streamlit Community Cloud currently often runs Python 3.14.
 # Pin packages that publish cp314 wheels so uv does not hang building from source.
 # Note: model was trained on sklearn 1.6.1; 1.7+ loads it with a version warning.
-streamlit>=1.28.0,<2
+streamlit>=1.46.0,<2
 pandas>=2.2.0
 numpy>=2.1.0
 matplotlib>=3.9.0

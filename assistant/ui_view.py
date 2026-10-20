@@ -5,8 +5,12 @@ import streamlit as st
 from assistant.ai_query import AIQuery
 from assistant.ai_result_assistant import AIResultAssistant
 from assistant.conversation_manager import ConversationManager
+from assistant.doctor_analysis_context import DoctorAnalysisContext
+from assistant.doctor_prompt_builder import DoctorPromptBuilder
+from assistant.doctor_safety_guard import DoctorSafetyGuard
 from assistant.llm_client import LLMClient
 from assistant.patient_analysis_context import PatientAnalysisContext
+from assistant.prompt_builder import PromptBuilder
 from assistant.safety_guard import SafetyGuard
 
 
@@ -62,6 +66,49 @@ def render_assistant_panel() -> None:
     with st.expander("Analysis context sent to the assistant", expanded=False):
         st.json(context.to_prompt_dict())
 
+    _render_chat(
+        context,
+        conversation=_get_conversation(),
+        safety_guard=SafetyGuard(),
+        prompt_builder=PromptBuilder(),
+        key_prefix="ai",
+        placeholder="Ask a question about your results",
+    )
+
+
+def render_doctor_assistant_panel(context: DoctorAnalysisContext, conversation_key: str) -> None:
+    """Doctor-facing assistant for one saved analysis; history is kept per analysis."""
+    st.subheader("AI Assistant")
+    st.caption(
+        "Ask about this analysis, the model's uncertainty, the patient subgroup, or how it compares "
+        "with the patient's earlier analyses. Answers are grounded in the ML output only."
+    )
+
+    with st.expander("Analysis context sent to the assistant", expanded=False):
+        st.json(context.to_prompt_dict())
+
+    if conversation_key not in st.session_state:
+        st.session_state[conversation_key] = ConversationManager()
+
+    _render_chat(
+        context,
+        conversation=st.session_state[conversation_key],
+        safety_guard=DoctorSafetyGuard(),
+        prompt_builder=DoctorPromptBuilder(),
+        key_prefix=conversation_key,
+        placeholder="Ask the assistant about this analysis",
+    )
+
+
+def _render_chat(
+    context: PatientAnalysisContext,
+    *,
+    conversation: ConversationManager,
+    safety_guard: SafetyGuard,
+    prompt_builder: PromptBuilder,
+    key_prefix: str,
+    placeholder: str,
+) -> None:
     api_key = _get_groq_api_key()
     if not api_key:
         st.warning(
@@ -70,25 +117,27 @@ def render_assistant_panel() -> None:
         )
         return
 
-    conversation = _get_conversation()
     for message in conversation.messages:
         with st.chat_message(message.role):
             st.write(message.content)
 
+    pending_key = f"{key_prefix}_pending_question"
     st.markdown("**Suggested questions**")
     cols = st.columns(2)
-    for index, suggestion in enumerate(SafetyGuard.SUGGESTED_QUESTIONS):
-        if cols[index % 2].button(suggestion, key=f"ai_suggestion_{index}"):
-            st.session_state.ai_pending_question = suggestion
+    for index, suggestion in enumerate(safety_guard.SUGGESTED_QUESTIONS):
+        if cols[index % 2].button(suggestion, key=f"{key_prefix}_suggestion_{index}"):
+            st.session_state[pending_key] = suggestion
 
-    prompt = st.chat_input("Ask a question about your results")
-    question = st.session_state.pop("ai_pending_question", None) or prompt
+    prompt = st.chat_input(placeholder, key=f"{key_prefix}_chat_input")
+    question = st.session_state.pop(pending_key, None) or prompt
     if not question:
         return
 
     try:
         assistant = AIResultAssistant(
             llm_client=LLMClient(api_key=api_key, model=_get_groq_model()),
+            prompt_builder=prompt_builder,
+            safety_guard=safety_guard,
             conversation=conversation,
         )
         response = assistant.ask(AIQuery(text=question), context)

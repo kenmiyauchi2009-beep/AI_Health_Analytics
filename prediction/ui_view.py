@@ -182,7 +182,8 @@ def render_cluster_layman_guide(n_clusters: int) -> None:
     )
 
 
-def _summary_tables(summary: ClusterSummary) -> None:
+def render_cluster_summary_tables(summary: ClusterSummary) -> None:
+    """Two tables: the cluster's most common symptoms and diseases."""
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Top symptoms**")
@@ -223,7 +224,7 @@ def render_cluster_assignment_result(result: ClusterAssignmentResult) -> None:
         "**Confidence** estimates how uniquely your symptoms fit this group versus the others. "
         "A higher value means a clearer match. Lower confidence means your symptoms could fit more than one group."
     )
-    _summary_tables(result.summary)
+    render_cluster_summary_tables(result.summary)
 
 
 def render_cluster_browse(controller: ClusterController) -> None:
@@ -243,7 +244,7 @@ def render_cluster_browse(controller: ClusterController) -> None:
         f"**Cluster {summary.cluster_id}** has about **{summary.patient_count}** "
         "past patient records with similar symptom patterns."
     )
-    _summary_tables(summary)
+    render_cluster_summary_tables(summary)
 
 
 def render_cluster_compare(controller: ClusterController) -> None:
@@ -281,13 +282,13 @@ def render_cluster_comparison(comparison: ClusterComparison) -> None:
         st.write(
             f"About **{comparison.left.patient_count}** past patient records in this group."
         )
-        _summary_tables(comparison.left)
+        render_cluster_summary_tables(comparison.left)
     with right_col:
         st.markdown(f"### Cluster {comparison.right.cluster_id}")
         st.write(
             f"About **{comparison.right.patient_count}** past patient records in this group."
         )
-        _summary_tables(comparison.right)
+        render_cluster_summary_tables(comparison.right)
 
     st.markdown("### What they share")
     st.caption("Patterns that appear in the top lists of both groups.")

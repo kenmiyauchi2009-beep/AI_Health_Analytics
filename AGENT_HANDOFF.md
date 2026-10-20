@@ -10,7 +10,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
 - Groq-powered assistant (`assistant/`) explains ML outputs only
 - Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
-- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview -v`
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review -v`
 
 ## Architecture (Current)
 
@@ -104,7 +104,7 @@ streamlit run app.py
 ## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview -v
+python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review -v
 ```
 
 ## Groq setup
@@ -118,11 +118,26 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
 ## Patient Overview (doctor)
 - **Files:** `app_pages/patient_overview_page.py` (UI), `app_pages/patient_overview_service.py` (data, unit-tested)
 - Every patient **Predict Disease** run is saved to MongoDB collection `patient_analyses` (symptoms, top disease, confidence, top-3, low-confidence flag)
-- Doctor clicks **View Patient** → `st.session_state.viewing_patient_email` → overview replaces the doctor dashboard; **← Back to dashboard** clears it
+- Doctor clicks **View Patient** → sets `st.session_state.viewing_patient_email` and switches to the **Patient Overview page** (`/patient-overview`); **← Back to dashboard** clears it
 - Shows profile (name, age from `date_of_birth`, `known_conditions`) + analysis history (date, symptoms, prediction, confidence)
-- **Review Analysis** opens top-3 + notes; **Save review** sets `reviewed`, `reviewed_by`, `review_notes`, `reviewed_at`
+- **Review Analysis** marks the analysis reviewed (`reviewed`, `reviewed_by`, `reviewed_at`) and opens the Review Analysis page
 - Only the patient's current Primary Health Practitioner can open the overview
 - Patient sign-up has an optional comma-separated **Known Conditions** field (stored as a list)
+
+## Review Analysis (doctor)
+- **Files:** `app_pages/analysis_review_page.py` (UI), `app_pages/analysis_review_service.py` (data, unit-tested)
+- Separate page (`/review-analysis`): **Review Analysis** sets `st.session_state.reviewing_analysis_id` and switches pages; **← Back to patient overview** clears it
+- Sections: Patient Reported Symptoms → Disease Predictions (model prediction, confidence, other predictions) → Patient Subgroup (cluster, similarity, common symptoms, common diagnoses) → **Why this Cluster** → AI Assistant → **Add Doctor's note**
+- Cluster is **recomputed** from the saved symptoms (not stored), so old analyses get one too
+- **Why this Cluster**: symptom overlap with the cluster's top symptoms + next-closest cluster and the similarity gap (flags < 5% as uncertain)
+- **Doctor AI assistant** reuses `AIResultAssistant` with `DoctorPromptBuilder`, `DoctorSafetyGuard` (doctor suggestions) and `DoctorAnalysisContext` (adds analysis date, known conditions, earlier analyses for comparison). Chat history is per analysis (`doctor_ai_<analysis id>`)
+- **Add Doctor's note** is a placeholder (shows a "coming soon" toast) — not implemented yet
+
+## Page routing
+- `app.py` always calls `st.navigation(..., position="hidden")` and picks the pages for the user: Sign in (signed out), the patient app (segmented control, unchanged), or the doctor pages
+- Doctor pages live in `app_pages/doctor_navigation.py`: Doctor Dashboard (default) → Patient Overview → Review Analysis. Move between them with `go_to(...)` (`st.switch_page`), which keeps session state
+- Reloading the browser starts a new session, so the user must sign in again (auth is session-only)
+- `AppTest` renders only the default page per run; set `at._page_hash = calc_hash("<url-path>")` to test another page
 
 ## Notes For Next Agent
 - Keep `app.py` thin.
