@@ -154,6 +154,17 @@ def get_requests_collection():
     return requests_collection
 
 
+def get_analyses_collection():
+    """Create the MongoDB collection that stores patients' saved disease predictions."""
+    users_collection = get_users_collection()
+    if users_collection is None:
+        return None
+
+    analyses_collection = users_collection.database["patient_analyses"]
+    analyses_collection.create_index([("patient_email", 1), ("created_at", -1)])
+    return analyses_collection
+
+
 def create_patient_doctor_request(patient_user: dict | None, doctor_email: str, note: str = "") -> dict | None:
     """Persist a real patient request against a doctor in MongoDB."""
     if not isinstance(patient_user, dict):
@@ -353,6 +364,10 @@ def render_signup_form() -> None:
     if normalized_form_role == "Patient":
         date_of_birth = st.date_input("Date of Birth")
         address = st.text_area("Address")
+        known_conditions = st.text_input(
+            "Known Conditions (Optional)",
+            placeholder="Comma-separated, e.g. Asthma, Type 2 Diabetes",
+        )
         medical_license_number = ""
         speciality = ""
         degree = ""
@@ -361,6 +376,7 @@ def render_signup_form() -> None:
     else:
         date_of_birth = None
         address = ""
+        known_conditions = ""
         medical_license_number = st.text_input("Medical License Number")
         speciality = st.text_input("Speciality")
         degree = st.text_input("Degree", placeholder="e.g. MBBS, MD")
@@ -420,7 +436,13 @@ def render_signup_form() -> None:
             }
 
             if selected_role == "Patient":
-                document.update({"date_of_birth": str(date_of_birth), "address": address.strip()})
+                document.update(
+                    {
+                        "date_of_birth": str(date_of_birth),
+                        "address": address.strip(),
+                        "known_conditions": [item.strip() for item in known_conditions.split(",") if item.strip()],
+                    }
+                )
             else:
                 document.update(
                     {

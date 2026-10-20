@@ -1,5 +1,7 @@
 import streamlit as st
 
+from app_pages.patient_overview_service import save_analysis
+from app_pages.registration_page import get_analyses_collection
 from assistant.ui_view import render_assistant_panel
 from prediction.cluster_controller import ClusterController
 from prediction.controller import DiseasePredictionController
@@ -19,6 +21,15 @@ from prediction.ui_view import (
     run_cluster_assignment,
     run_prediction,
 )
+
+
+def _save_to_history(selected_symptoms: list[str], result) -> None:
+    """Keep the prediction in the patient's analysis history so their doctor can review it."""
+    user = st.session_state.get("authenticated_user") or {}
+    try:
+        save_analysis(get_analyses_collection(), user.get("email"), selected_symptoms, result)
+    except Exception as error:  # pragma: no cover - saving history must not block the result
+        st.warning(f"Your result could not be saved to your history: {error}")
 
 
 def render() -> None:
@@ -56,6 +67,7 @@ def render() -> None:
                 controller = DiseasePredictionController(model=model, symptoms=symptoms)
                 result = run_prediction(controller, selected_symptoms)
                 st.session_state.latest_prediction = result
+                _save_to_history(selected_symptoms, result)
                 render_prediction_result(result)
             except ValueError as error:
                 st.error(str(error))

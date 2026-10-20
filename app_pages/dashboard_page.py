@@ -1,8 +1,15 @@
 import streamlit as st
 
+from app_pages.patient_overview_page import (
+    VIEWING_PATIENT_KEY,
+    open_patient_overview,
+    render as render_patient_overview,
+)
+from app_pages.patient_overview_service import calculate_age, get_patient_analyses
 from app_pages.practitioner_service import REQUEST_TYPE_CHANGE, respond_to_practitioner_request
 from app_pages.registration_page import (
     get_accepted_doctor_requests,
+    get_analyses_collection,
     get_pending_doctor_requests,
     get_requests_collection,
     get_users_collection,
@@ -45,6 +52,16 @@ def get_user_role(user: dict | None) -> str:
     return "Patient"
 
 
+def _summarize_analysis(analysis: dict) -> str:
+    """One-line summary of a saved prediction for the patient list."""
+    created_at = analysis.get("created_at")
+    when = created_at.strftime("%b %d, %Y") if hasattr(created_at, "strftime") else "unknown date"
+    return (
+        f"{analysis.get('top_disease') or 'Unknown'} "
+        f"({float(analysis.get('top_probability') or 0):.1%} confidence) on {when}"
+    )
+
+
 def _get_doctor_context() -> tuple[str, str, list[dict], list[dict]]:
     """Return the doctor greeting text and live patient data for the doctor workspace."""
     user = st.session_state.get("authenticated_user") or {}
@@ -74,13 +91,20 @@ def _get_doctor_context() -> tuple[str, str, list[dict], list[dict]]:
             }
         )
 
+    users_collection = get_users_collection() if accepted_requests else None
+    analyses_collection = get_analyses_collection() if accepted_requests else None
     my_patients = []
     for request in accepted_requests:
+        patient_email = str(request.get("patient_email") or "").strip().lower()
+        patient = users_collection.find_one({"email": patient_email}) if users_collection is not None else None
+        age = calculate_age((patient or {}).get("date_of_birth"))
+        latest = get_patient_analyses(analyses_collection, patient_email, limit=1)
         my_patients.append(
             {
-                "name": request.get("patient_name") or request.get("patient_email") or "Patient",
-                "age": "N/A",
-                "last_analysis": "Connection accepted and available for follow-up.",
+                "name": request.get("patient_name") or patient_email or "Patient",
+                "email": patient_email,
+                "age": age if age is not None else "N/A",
+                "last_analysis": _summarize_analysis(latest[0]) if latest else "No analyses yet.",
             }
         )
 
@@ -103,6 +127,11 @@ def _respond_to_request(request_id, *, accept: bool) -> None:
 
 def render_doctor_dashboard() -> None:
     """Render the doctor-specific landing workspace and patient management area."""
+    viewing_patient = st.session_state.get(VIEWING_PATIENT_KEY)
+    if viewing_patient:
+        render_patient_overview(viewing_patient)
+        return
+
     doctor_name, speciality, patient_requests, my_patients = _get_doctor_context()
 
     st.title(f'Welcome Doctor "{doctor_name}"')
@@ -153,8 +182,8 @@ def render_doctor_dashboard() -> None:
                 st.write(f"**{patient['name']}**")
                 st.write(f"Age: {patient['age']}")
                 st.write(f"Last Analysis: {patient['last_analysis']}")
-                if st.button("View Patient", key=f"view_patient_{patient_index}"):
-                    st.info(f"Opening profile for {patient['name']}")
+                if st.button("View Patient", key=f"view_patient_{patient_index}", disabled=not patient["email"]):
+                    open_patient_overview(patient["email"])
                 st.markdown("---")
 
 

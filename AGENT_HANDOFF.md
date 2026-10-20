@@ -10,7 +10,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
 - Groq-powered assistant (`assistant/`) explains ML outputs only
 - Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
-- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant -v`
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview -v`
 
 ## Architecture (Current)
 
@@ -104,7 +104,7 @@ streamlit run app.py
 ## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant -v
+python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview -v
 ```
 
 ## Groq setup
@@ -114,6 +114,15 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
    ```
 2. Example template: `.streamlit/secrets.toml.example`
 3. For Streamlit Cloud, add the same secret in the app settings.
+
+## Patient Overview (doctor)
+- **Files:** `app_pages/patient_overview_page.py` (UI), `app_pages/patient_overview_service.py` (data, unit-tested)
+- Every patient **Predict Disease** run is saved to MongoDB collection `patient_analyses` (symptoms, top disease, confidence, top-3, low-confidence flag)
+- Doctor clicks **View Patient** → `st.session_state.viewing_patient_email` → overview replaces the doctor dashboard; **← Back to dashboard** clears it
+- Shows profile (name, age from `date_of_birth`, `known_conditions`) + analysis history (date, symptoms, prediction, confidence)
+- **Review Analysis** opens top-3 + notes; **Save review** sets `reviewed`, `reviewed_by`, `review_notes`, `reviewed_at`
+- Only the patient's current Primary Health Practitioner can open the overview
+- Patient sign-up has an optional comma-separated **Known Conditions** field (stored as a list)
 
 ## Notes For Next Agent
 - Keep `app.py` thin.
