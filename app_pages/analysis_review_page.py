@@ -12,9 +12,10 @@ from app_pages.analysis_review_service import (
     format_analysis_date,
 )
 from app_pages.doctor_navigation import PATIENT_OVERVIEW, REVIEWING_ANALYSIS_KEY, go_to
+from app_pages.doctor_notes_service import get_doctor_notes, save_doctor_note
 from app_pages.patient_overview_page import load_viewed_patient
 from app_pages.patient_overview_service import get_patient_analyses
-from app_pages.registration_page import get_analyses_collection
+from app_pages.registration_page import get_analyses_collection, get_doctor_notes_collection
 from assistant.ui_view import render_doctor_assistant_panel
 from prediction.cluster_controller import ClusterController
 from prediction.controller import DiseasePredictionController
@@ -107,6 +108,51 @@ def _render_patient_subgroup(controller: ClusterController, symptoms: list[str],
             _render_why_this_cluster(explain_cluster_match(controller, symptoms, assignment), assignment)
 
 
+def _render_doctor_notes(patient: dict, analysis: dict) -> None:
+    analysis_id = str(analysis["_id"])
+    open_key = f"doctor_note_open_{analysis_id}"
+    # Bumped after each save so the text box comes back empty.
+    version_key = f"doctor_note_version_{analysis_id}"
+    notes_collection = get_doctor_notes_collection()
+
+    flash = st.session_state.pop("doctor_note_flash", None)
+    if flash:
+        st.success(flash)
+
+    if not st.session_state.get(open_key):
+        if st.button("Add Doctor's note", key=f"add_doctor_note_{analysis_id}", type="primary"):
+            st.session_state[open_key] = True
+            st.rerun()
+    else:
+        st.subheader("Doctor Notes")
+        with st.form(key=f"doctor_note_form_{analysis_id}"):
+            text = st.text_area(
+                "Doctor notes",
+                key=f"doctor_note_text_{analysis_id}_{st.session_state.get(version_key, 0)}",
+                height=150,
+                label_visibility="collapsed",
+                placeholder="Write your note about this analysis",
+            )
+            submitted = st.form_submit_button("Save Note", type="primary")
+        if submitted:
+            user = st.session_state.get("authenticated_user") or {}
+            _, error = save_doctor_note(notes_collection, patient, user.get("email"), text, analysis["_id"])
+            if error:
+                st.error(error)
+            else:
+                st.session_state[version_key] = st.session_state.get(version_key, 0) + 1
+                st.session_state["doctor_note_flash"] = "Note saved."
+                st.rerun()
+
+    notes = get_doctor_notes(notes_collection, patient.get("id"), analysis["_id"])
+    if notes:
+        st.markdown("**Saved notes**")
+        for note in notes:
+            with st.container(border=True):
+                st.caption(format_analysis_date(note.created_at))
+                st.write(note.text)
+
+
 def render_page() -> None:
     """Review Analysis page: the full ML output for the analysis picked on the Patient Overview."""
     if st.button("← Back to patient overview", key="analysis_review_back"):
@@ -155,5 +201,4 @@ def _render(patient: dict, analysis: dict, all_analyses: list[dict]) -> None:
     )
 
     st.divider()
-    if st.button("Add Doctor's note", key=f"add_doctor_note_{analysis_id}", type="primary"):
-        st.toast("Doctor's notes are coming soon.")
+    _render_doctor_notes(patient, analysis)

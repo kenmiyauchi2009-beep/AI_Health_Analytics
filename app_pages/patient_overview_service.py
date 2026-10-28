@@ -88,6 +88,7 @@ def get_patient_overview(users_collection, requests_collection, doctor_email: st
         return None
 
     return {
+        "id": patient.get("_id"),
         "email": patient_email,
         "name": format_person_name(patient),
         "age": calculate_age(patient.get("date_of_birth")),

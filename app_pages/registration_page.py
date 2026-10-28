@@ -165,6 +165,17 @@ def get_analyses_collection():
     return analyses_collection
 
 
+def get_doctor_notes_collection():
+    """Create the MongoDB collection that stores doctors' notes about their patients."""
+    users_collection = get_users_collection()
+    if users_collection is None:
+        return None
+
+    notes_collection = users_collection.database["doctor_notes"]
+    notes_collection.create_index([("patient_id", 1), ("created_at", -1)])
+    return notes_collection
+
+
 def create_patient_doctor_request(patient_user: dict | None, doctor_email: str, note: str = "") -> dict | None:
     """Persist a real patient request against a doctor in MongoDB."""
     if not isinstance(patient_user, dict):

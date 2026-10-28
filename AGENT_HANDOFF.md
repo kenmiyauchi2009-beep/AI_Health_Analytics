@@ -10,7 +10,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
 - Groq-powered assistant (`assistant/`) explains ML outputs only
 - Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
-- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review -v`
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes -v`
 
 ## Architecture (Current)
 
@@ -104,7 +104,7 @@ streamlit run app.py
 ## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review -v
+python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes -v
 ```
 
 ## Groq setup
@@ -131,7 +131,14 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
 - Cluster is **recomputed** from the saved symptoms (not stored), so old analyses get one too
 - **Why this Cluster**: symptom overlap with the cluster's top symptoms + next-closest cluster and the similarity gap (flags < 5% as uncertain)
 - **Doctor AI assistant** reuses `AIResultAssistant` with `DoctorPromptBuilder`, `DoctorSafetyGuard` (doctor suggestions) and `DoctorAnalysisContext` (adds analysis date, known conditions, earlier analyses for comparison). Chat history is per analysis (`doctor_ai_<analysis id>`)
-- **Add Doctor's note** is a placeholder (shows a "coming soon" toast) — not implemented yet
+- **Add Doctor's note** opens the Doctor Notes box (see below)
+
+## Doctor Notes
+- **File:** `app_pages/doctor_notes_service.py` (`DoctorNote` dataclass + save/list, unit-tested); UI in `analysis_review_page.py`
+- Stored separately in MongoDB collection `doctor_notes`: `patient_id` (patient's user `_id`), `patient_email`, `doctor_email`, `analysis_id`, `text`, `created_at`
+- `get_patient_overview()` now also returns the patient's `id`
+- Review Analysis page: **Add Doctor's note** → text box + **Save Note**; notes saved for that analysis are listed below, newest first
+- The older `review_notes` field on analyses is no longer written by the UI (still shown on the overview if present)
 
 ## Page routing
 - `app.py` always calls `st.navigation(..., position="hidden")` and picks the pages for the user: Sign in (signed out), the patient app (segmented control, unchanged), or the doctor pages
