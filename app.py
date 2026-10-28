@@ -8,10 +8,12 @@ from app_pages.practitioner_page import (
     render_practitioner_notifications,
 )
 from app_pages.prediction_page import render as render_prediction_page
+from app_pages.prescription_patient_page import render as render_my_prescriptions_page
 from app_pages.registration_page import render_auth_gate
 
 PRACTITIONER_PAGE = "Primary Health Practitioner"
-PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE]
+MY_PRESCRIPTIONS_PAGE = "My Prescriptions"
+PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE, MY_PRESCRIPTIONS_PAGE]
 
 
 def main() -> None:
@@ -63,6 +65,8 @@ def render_patient_app() -> None:
         render_prediction_page()
     elif selected_page == PRACTITIONER_PAGE:
         render_practitioner_page()
+    elif selected_page == MY_PRESCRIPTIONS_PAGE:
+        render_my_prescriptions_page()
     else:
         render_dashboard_page()
 

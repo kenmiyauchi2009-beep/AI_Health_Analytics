@@ -7,13 +7,25 @@ import streamlit as st
 from app_pages.doctor_navigation import (
     DASHBOARD,
     PATIENT_OVERVIEW,
+    PRESCRIPTIONS,
     REVIEW_ANALYSIS,
     REVIEWING_ANALYSIS_KEY,
     VIEWING_PATIENT_KEY,
     go_to,
 )
 from app_pages.patient_overview_service import get_patient_analyses, get_patient_overview, review_analysis
-from app_pages.registration_page import get_analyses_collection, get_requests_collection, get_users_collection
+from app_pages.prescription_service import (
+    STATUS_DRAFT,
+    STATUS_FINALIZED,
+    STATUS_VOIDED,
+    list_prescriptions_for_doctor,
+)
+from app_pages.registration_page import (
+    get_analyses_collection,
+    get_prescriptions_collection,
+    get_requests_collection,
+    get_users_collection,
+)
 
 def open_patient_overview(patient_email: str) -> None:
     """Switch the doctor workspace to this patient's overview."""
@@ -71,6 +83,21 @@ def _render_analysis(analysis: dict, patient_email: str) -> None:
             go_to(REVIEW_ANALYSIS)
 
 
+def _render_prescriptions_section(patient: dict) -> None:
+    st.subheader("Prescriptions")
+    user = st.session_state.get("authenticated_user") or {}
+    prescriptions = list_prescriptions_for_doctor(get_prescriptions_collection(), user.get("email"), patient["email"])
+    with st.container(border=True):
+        counts = st.columns(3)
+        for column, (status, label) in zip(
+            counts, [(STATUS_DRAFT, "Your drafts"), (STATUS_FINALIZED, "Finalized"), (STATUS_VOIDED, "Voided")]
+        ):
+            column.metric(label, sum(1 for prescription in prescriptions if prescription.get("status") == status))
+        st.caption("Simulated prescriptions for educational demonstration only.")
+        if st.button("View Prescriptions", key="patient_overview_prescriptions", type="primary"):
+            go_to(PRESCRIPTIONS)
+
+
 def load_viewed_patient() -> dict | None:
     """Return the patient picked on the dashboard, or show why it can't be shown."""
     patient_email = st.session_state.get(VIEWING_PATIENT_KEY)
@@ -101,6 +128,7 @@ def render_page() -> None:
 
     st.title("Patient Overview")
     _render_profile(patient)
+    _render_prescriptions_section(patient)
 
     st.subheader("Analysis History")
     analyses = get_patient_analyses(get_analyses_collection(), patient["email"])

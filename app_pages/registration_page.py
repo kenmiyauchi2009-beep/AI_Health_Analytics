@@ -176,6 +176,18 @@ def get_doctor_notes_collection():
     return notes_collection
 
 
+def get_prescriptions_collection():
+    """Create the MongoDB collection that stores simulated prescriptions."""
+    users_collection = get_users_collection()
+    if users_collection is None:
+        return None
+
+    prescriptions_collection = users_collection.database["prescriptions"]
+    prescriptions_collection.create_index("prescription_id", unique=True)
+    prescriptions_collection.create_index([("patient_email", 1), ("created_at", -1)])
+    return prescriptions_collection
+
+
 def create_patient_doctor_request(patient_user: dict | None, doctor_email: str, note: str = "") -> dict | None:
     """Persist a real patient request against a doctor in MongoDB."""
     if not isinstance(patient_user, dict):

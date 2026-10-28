@@ -10,7 +10,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
 - Groq-powered assistant (`assistant/`) explains ML outputs only
 - Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
-- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes -v`
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions -v`
 
 ## Architecture (Current)
 
@@ -104,7 +104,7 @@ streamlit run app.py
 ## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes -v
+python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions -v
 ```
 
 ## Groq setup
@@ -139,6 +139,14 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
 - `get_patient_overview()` now also returns the patient's `id`
 - Review Analysis page: **Add Doctor's note** → text box + **Save Note**; notes saved for that analysis are listed below, newest first
 - The older `review_notes` field on analyses is no longer written by the UI (still shown on the overview if present)
+
+## Simulated Prescriptions (educational demo)
+- **Not real prescriptions.** Every screen and PDF page says SIMULATED / not legally valid / not sent to a pharmacy. Nothing is sent anywhere, and no medication details are pre-filled, suggested or derived from ML predictions (an analysis can only be *linked* for reference)
+- **Files:** `prescription_service.py` (rules + data, unit-tested), `prescription_pdf.py` (fpdf2), `prescription_ui.py` (shared widgets), `prescription_doctor_pages.py` (doctor pages), `prescription_patient_page.py` (patient **My Prescriptions** tab)
+- MongoDB collection `prescriptions`: `prescription_id` (`SIM-RX-YYYYMMDD-XXXXXX`, unique), `patient_id`/`patient_email`/`patient_name`, `doctor_id`/`doctor_email`/`doctor_name`, `analysis_id`, `doctor_note`, `medications[]` (name, dosage, frequency, duration, instructions), `status`, `is_simulated`, timestamps, `void_reason`, `audit_history[]` (action, by, at, details)
+- Rules (enforced in the service): new → **draft**; drafts visible/editable/finalizable only by their author; create + finalize require being the patient's current Primary Health Practitioner; **finalized** is read-only; the author can **void** a finalized one with a reason (confirm dialog); voided stays in history; patients see only their own finalized + voided; every create/edit/status change is appended to `audit_history`
+- Doctor flow: Patient Overview → **Prescriptions** section (counts) → **View Prescriptions** (`/patient-prescriptions`, filters Draft/Finalized/Voided, View/Edit) → **Create Prescription** / Edit (`/prescription-editor`, add/remove medication rows, Save as draft / Finalize) → detail (`/prescription-detail`, PDF, Finalize/Void, audit history)
+- Confirmation dialogs stay open via session-state flags (`rx_finalize_dialog`, `rx_void_dialog`), closed by Cancel/confirm/`on_dismiss`
 
 ## Page routing
 - `app.py` always calls `st.navigation(..., position="hidden")` and picks the pages for the user: Sign in (signed out), the patient app (segmented control, unchanged), or the doctor pages
