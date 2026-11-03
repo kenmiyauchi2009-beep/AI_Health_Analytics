@@ -223,18 +223,18 @@ def _render_medication_rows(editor: dict) -> list[dict]:
         with st.container(border=True):
             header, remove = st.columns([5, 1], vertical_alignment="center")
             header.markdown(f"**Medication {index}**")
-            if remove.button("Remove", key=_widget_key(editor, f"{row}_remove"), disabled=len(editor["rows"]) == 1):
-                editor["rows"].remove(row)
-                st.rerun()
+            remove.button(
+                "Remove", key=_widget_key(editor, f"{row}_remove"), disabled=len(editor["rows"]) == 1,
+                on_click=editor["rows"].remove, args=(row,),
+            )
             columns = st.columns(4)
             for column, field in zip(columns, ("name", "dosage", "frequency", "duration")):
                 column.text_input(FIELD_LABELS[field], key=_widget_key(editor, f"{row}_{field}"))
             st.text_input(FIELD_LABELS["instructions"], key=_widget_key(editor, f"{row}_instructions"))
         medications.append({field: st.session_state.get(_widget_key(editor, f"{row}_{field}"), "") for field in MEDICATION_FIELDS})
 
-    if st.button("+ Add medication", key=_widget_key(editor, "add_row")):
-        _add_row(editor)
-        st.rerun()
+    # Callbacks rather than st.rerun() mid-page, so every row's widgets are drawn on each run and keep their values.
+    st.button("+ Add medication", key=_widget_key(editor, "add_row"), on_click=_add_row, args=(editor,))
     return medications
 
 

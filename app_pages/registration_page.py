@@ -188,6 +188,29 @@ def get_prescriptions_collection():
     return prescriptions_collection
 
 
+def get_availability_collection():
+    """Create the MongoDB collection that stores each doctor's working hours and blocked periods."""
+    users_collection = get_users_collection()
+    if users_collection is None:
+        return None
+
+    availability_collection = users_collection.database["doctor_availability"]
+    availability_collection.create_index("doctor_email", unique=True)
+    return availability_collection
+
+
+def get_appointments_collection():
+    """Create the MongoDB collection that stores patient-doctor appointments."""
+    users_collection = get_users_collection()
+    if users_collection is None:
+        return None
+
+    appointments_collection = users_collection.database["appointments"]
+    appointments_collection.create_index([("doctor_email", 1), ("status", 1), ("start_at", 1)])
+    appointments_collection.create_index([("patient_email", 1), ("start_at", -1)])
+    return appointments_collection
+
+
 def create_patient_doctor_request(patient_user: dict | None, doctor_email: str, note: str = "") -> dict | None:
     """Persist a real patient request against a doctor in MongoDB."""
     if not isinstance(patient_user, dict):

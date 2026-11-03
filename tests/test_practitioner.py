@@ -67,6 +67,13 @@ class FakeCollection:
                 return _Result(matched_count=1)
         return _Result()
 
+    def delete_one(self, query):
+        for doc in self.docs:
+            if _matches(doc, query):
+                self.docs.remove(doc)
+                return _Result(matched_count=1)
+        return _Result()
+
     def update_many(self, query, update):
         matched = [doc for doc in self.docs if _matches(doc, query)]
         for doc in matched:

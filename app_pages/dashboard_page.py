@@ -1,11 +1,14 @@
 import streamlit as st
 
+from app_pages.appointment_service import list_for_doctor
+from app_pages.doctor_navigation import APPOINTMENTS, AVAILABILITY, go_to
 from app_pages.patient_overview_page import open_patient_overview
 from app_pages.patient_overview_service import calculate_age, get_patient_analyses
 from app_pages.practitioner_service import REQUEST_TYPE_CHANGE, respond_to_practitioner_request
 from app_pages.registration_page import (
     get_accepted_doctor_requests,
     get_analyses_collection,
+    get_appointments_collection,
     get_pending_doctor_requests,
     get_requests_collection,
     get_users_collection,
@@ -128,13 +131,26 @@ def render_doctor_dashboard() -> None:
     st.title(f'Welcome Doctor "{doctor_name}"')
     st.subheader(speciality)
 
-    metric_cols = st.columns(3)
+    user = st.session_state.get("authenticated_user") or {}
+    appointment_requests, upcoming_appointments, _ = list_for_doctor(get_appointments_collection(), user.get("email"))
+
+    metric_cols = st.columns(5)
     with metric_cols[0]:
         st.metric("My Patients", len(my_patients))
     with metric_cols[1]:
         st.metric("Pending Requests", len(patient_requests))
     with metric_cols[2]:
         st.metric("Active Cases", len(my_patients))
+    with metric_cols[3]:
+        st.metric("Appointment Requests", len(appointment_requests))
+    with metric_cols[4]:
+        st.metric("Upcoming Appointments", len(upcoming_appointments))
+
+    appointments_col, availability_col, _ = st.columns([1, 1, 3])
+    if appointments_col.button("📅 Appointments", key="dashboard_appointments", type="primary"):
+        go_to(APPOINTMENTS)
+    if availability_col.button("🕒 My Availability", key="dashboard_availability"):
+        go_to(AVAILABILITY)
 
     st.markdown("---")
     st.subheader("Primary Health Practitioner Requests")

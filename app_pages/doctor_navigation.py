@@ -14,6 +14,8 @@ REVIEW_ANALYSIS = "review-analysis"
 PRESCRIPTIONS = "patient-prescriptions"
 PRESCRIPTION_EDITOR = "prescription-editor"
 PRESCRIPTION_DETAIL = "prescription-detail"
+APPOINTMENTS = "appointments"
+AVAILABILITY = "availability"
 
 VIEWING_PATIENT_KEY = "viewing_patient_email"
 REVIEWING_ANALYSIS_KEY = "reviewing_analysis_id"
@@ -26,6 +28,8 @@ NEW_PRESCRIPTION = "new"
 def doctor_pages() -> dict[str, st.Page]:
     # Imported here because these page modules import go_to() from this one.
     from app_pages.analysis_review_page import render_page as render_analysis_review_page
+    from app_pages.appointment_doctor_page import render_page as render_appointments_page
+    from app_pages.availability_page import render_page as render_availability_page
     from app_pages.dashboard_page import render_doctor_dashboard
     from app_pages.patient_overview_page import render_page as render_patient_overview_page
     from app_pages.prescription_doctor_pages import (
@@ -45,6 +49,8 @@ def doctor_pages() -> dict[str, st.Page]:
         PRESCRIPTION_DETAIL: st.Page(
             render_prescription_detail_page, title="Prescription", url_path=PRESCRIPTION_DETAIL
         ),
+        APPOINTMENTS: st.Page(render_appointments_page, title="Appointments", url_path=APPOINTMENTS),
+        AVAILABILITY: st.Page(render_availability_page, title="My Availability", url_path=AVAILABILITY),
     }
 
 

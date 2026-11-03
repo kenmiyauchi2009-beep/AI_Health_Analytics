@@ -10,7 +10,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
 - Groq-powered assistant (`assistant/`) explains ML outputs only
 - Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
-- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions -v`
+- Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions tests.test_appointments -v`
 
 ## Architecture (Current)
 
@@ -104,7 +104,7 @@ streamlit run app.py
 ## How To Verify
 ```bash
 source venv/bin/activate
-python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions -v
+python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions tests.test_appointments -v
 ```
 
 ## Groq setup
@@ -147,6 +147,18 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
 - Rules (enforced in the service): new → **draft**; drafts visible/editable/finalizable only by their author; create + finalize require being the patient's current Primary Health Practitioner; **finalized** is read-only; the author can **void** a finalized one with a reason (confirm dialog); voided stays in history; patients see only their own finalized + voided; every create/edit/status change is appended to `audit_history`
 - Doctor flow: Patient Overview → **Prescriptions** section (counts) → **View Prescriptions** (`/patient-prescriptions`, filters Draft/Finalized/Voided, View/Edit) → **Create Prescription** / Edit (`/prescription-editor`, add/remove medication rows, Save as draft / Finalize) → detail (`/prescription-detail`, PDF, Finalize/Void, audit history)
 - Confirmation dialogs stay open via session-state flags (`rx_finalize_dialog`, `rx_void_dialog`), closed by Cancel/confirm/`on_dismiss`
+
+## Appointments
+- **Files:** `availability_service.py` (settings, validation, slot generation), `appointment_service.py` (statuses + rules), both unit-tested in `tests/test_appointments.py`; UI in `availability_page.py` (doctor `/availability`), `appointment_doctor_page.py` (doctor `/appointments`), `appointment_patient_page.py` (patient **Appointments** tab), shared widgets in `appointment_ui.py`
+- MongoDB `doctor_availability` (one doc per doctor, unique `doctor_email`): `timezone`, `slot_minutes` (15/30/45/60), `break_minutes`, `weekly` {"0".."6" (Mon..Sun): [{start, end} "HH:MM"]}, `blocked` [{start, end "YYYY-MM-DDTHH:MM" doctor-local, reason}]
+- MongoDB `appointments`: patient/doctor email+id+name, `start_at`/`end_at` (**naive UTC**), `duration_minutes`, `timezone` (doctor's, used for display), `reason`, `status`, `expires_at`, `reschedule` {proposed_by, start_at, end_at, created_at, expires_at} or null, rejection/cancellation fields, `history` [{action, by, at, details}]
+- Statuses: `pending` → `confirmed` | `rejected` | `expired` | `cancelled`; `confirmed` → `completed` | `no_show` (after start) | `cancelled`
+- Slots: laid out from each interval start, every duration + break, must end inside the interval; past, blocked and reserved times removed. Booking window 30 days
+- Reservations: pending (until `expires_at`) and confirmed appointments, plus pending reschedule proposals. `expires_at` = min(created + 24h, slot start). Expiry is lazy (`expire_stale()` runs on every read/write) — no background job
+- Booking rules: only with the patient's current Primary Health Practitioner; future, valid, free slot; reason required; no overlapping active appointments for the patient (any doctor). After inserting, `_lost_race()` re-checks and deletes the later of two simultaneous bookings
+- Reschedule: either party, on a future pending/confirmed appointment; original unchanged until the other party accepts; accepting moves the slot (and confirms a pending appointment)
+- Doctor nav: dashboard buttons + metrics, and a sidebar (Dashboard / Appointments / My Availability / Logout)
+- Editors use `on_click` callbacks for add/remove rows (not `st.rerun()` mid-page) so every widget is drawn each run and keeps its value
 
 ## Page routing
 - `app.py` always calls `st.navigation(..., position="hidden")` and picks the pages for the user: Sign in (signed out), the patient app (segmented control, unchanged), or the doctor pages

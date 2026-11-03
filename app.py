@@ -1,7 +1,8 @@
 import streamlit as st
 
 from app_pages.dashboard_page import get_user_role, render as render_dashboard_page
-from app_pages.doctor_navigation import doctor_pages
+from app_pages.appointment_patient_page import render as render_appointments_page
+from app_pages.doctor_navigation import APPOINTMENTS, AVAILABILITY, DASHBOARD, doctor_pages
 from app_pages.practitioner_page import (
     get_tab_label as get_practitioner_tab_label,
     render as render_practitioner_page,
@@ -13,7 +14,8 @@ from app_pages.registration_page import render_auth_gate
 
 PRACTITIONER_PAGE = "Primary Health Practitioner"
 MY_PRESCRIPTIONS_PAGE = "My Prescriptions"
-PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE, MY_PRESCRIPTIONS_PAGE]
+APPOINTMENTS_PAGE = "Appointments"
+PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE, APPOINTMENTS_PAGE, MY_PRESCRIPTIONS_PAGE]
 
 
 def main() -> None:
@@ -26,12 +28,29 @@ def main() -> None:
     if st.session_state.get("authenticated_user") is None:
         pages = [st.Page(render_auth_gate, title="Sign in", url_path="sign-in", default=True)]
     elif get_user_role(st.session_state.authenticated_user) == "Doctor":
-        # Doctors get separate pages: dashboard -> patient overview -> review analysis.
-        pages = list(doctor_pages().values())
+        # Doctors get separate pages: dashboard -> patient overview -> review analysis, appointments, ...
+        pages = doctor_pages()
+        _render_doctor_sidebar(pages)
+        pages = list(pages.values())
     else:
         pages = [st.Page(render_patient_app, title="DeltaAI Bio Explorer", url_path="home", default=True)]
 
     st.navigation(pages, position="hidden").run()
+
+
+def _logout() -> None:
+    st.session_state.clear()
+    st.rerun()
+
+
+def _render_doctor_sidebar(pages: dict) -> None:
+    with st.sidebar:
+        st.write(f"Signed in as: {st.session_state.authenticated_user.get('email', 'Doctor')}")
+        st.page_link(pages[DASHBOARD], label="Dashboard", icon="🏠")
+        st.page_link(pages[APPOINTMENTS], label="Appointments", icon="📅")
+        st.page_link(pages[AVAILABILITY], label="My Availability", icon="🕒")
+        if st.button("Logout", key="doctor_logout"):
+            _logout()
 
 
 def render_patient_app() -> None:
@@ -65,6 +84,8 @@ def render_patient_app() -> None:
         render_prediction_page()
     elif selected_page == PRACTITIONER_PAGE:
         render_practitioner_page()
+    elif selected_page == APPOINTMENTS_PAGE:
+        render_appointments_page()
     elif selected_page == MY_PRESCRIPTIONS_PAGE:
         render_my_prescriptions_page()
     else:
