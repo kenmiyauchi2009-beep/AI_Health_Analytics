@@ -1,95 +1,51 @@
 import streamlit as st
 
-from app_pages.dashboard_page import get_user_role, render as render_dashboard_page
-from app_pages.appointment_patient_page import render as render_appointments_page
-from app_pages.doctor_navigation import APPOINTMENTS, AVAILABILITY, DASHBOARD, doctor_pages
-from app_pages.practitioner_page import (
-    get_tab_label as get_practitioner_tab_label,
-    render as render_practitioner_page,
-    render_practitioner_notifications,
-)
-from app_pages.prediction_page import render as render_prediction_page
-from app_pages.prescription_patient_page import render as render_my_prescriptions_page
+from app_pages.dashboard_page import get_user_role
+from app_pages.doctor_navigation import SIDEBAR_GROUPS as DOCTOR_GROUPS
+from app_pages.doctor_navigation import doctor_pages
+from app_pages.patient_navigation import SIDEBAR_GROUPS as PATIENT_GROUPS
+from app_pages.patient_navigation import patient_pages
 from app_pages.registration_page import render_auth_gate
+from app_pages.sidebar import render_sidebar
+from ui.theme import apply_theme
 
-PRACTITIONER_PAGE = "Primary Health Practitioner"
-MY_PRESCRIPTIONS_PAGE = "My Prescriptions"
-APPOINTMENTS_PAGE = "Appointments"
-PAGE_OPTIONS = ["Dashboard", "Disease Prediction", PRACTITIONER_PAGE, APPOINTMENTS_PAGE, MY_PRESCRIPTIONS_PAGE]
+# The URL someone asked for while signed out, so they land there (or on home) after signing in.
+REQUESTED_PATH_KEY = "requested_path"
+
+
+def _signed_out_pages() -> list:
+    """Every app URL shows the sign-in screen while signed out, so links and reloads never hit "page not found";
+    after signing in, the person lands on the page they asked for."""
+    paths = {*patient_pages().keys(), *doctor_pages().keys()}
+    return [st.Page(render_auth_gate, title="Sign in", url_path="sign-in", default=True)] + [
+        st.Page(render_auth_gate, title="Sign in", url_path=path) for path in sorted(paths)
+    ]
 
 
 def main() -> None:
     """App-level controller: picks the pages available to the current user and runs the selected one."""
-    st.set_page_config(page_title="DeltaAI Bio Explorer", layout="wide")
+    st.set_page_config(page_title="DeltaAI Health", page_icon="assets/logo_icon.svg", layout="wide")
+    apply_theme()
 
-    if "authenticated_user" not in st.session_state:
-        st.session_state.authenticated_user = None
-
-    if st.session_state.get("authenticated_user") is None:
-        pages = [st.Page(render_auth_gate, title="Sign in", url_path="sign-in", default=True)]
-    elif get_user_role(st.session_state.authenticated_user) == "Doctor":
-        # Doctors get separate pages: dashboard -> patient overview -> review analysis, appointments, ...
-        pages = doctor_pages()
-        _render_doctor_sidebar(pages)
-        pages = list(pages.values())
+    user = st.session_state.get("authenticated_user")
+    if user is None:
+        pages = _signed_out_pages()
     else:
-        pages = [st.Page(render_patient_app, title="DeltaAI Bio Explorer", url_path="home", default=True)]
+        role = get_user_role(user)
+        pages_by_key, groups = (doctor_pages(), DOCTOR_GROUPS) if role == "Doctor" else (patient_pages(), PATIENT_GROUPS)
+        requested = st.session_state.pop(REQUESTED_PATH_KEY, None)
+        if requested is not None and requested not in pages_by_key:
+            # Signed in on a URL this role doesn't have (e.g. a patient page link): start on the home page.
+            st.switch_page(next(page for page in pages_by_key.values() if page.default))
+        render_sidebar(groups, pages_by_key, user, role)
+        pages = list(pages_by_key.values())
 
-    st.navigation(pages, position="hidden").run()
-
-
-def _logout() -> None:
-    st.session_state.clear()
-    st.rerun()
-
-
-def _render_doctor_sidebar(pages: dict) -> None:
-    with st.sidebar:
-        st.write(f"Signed in as: {st.session_state.authenticated_user.get('email', 'Doctor')}")
-        st.page_link(pages[DASHBOARD], label="Dashboard", icon="🏠")
-        st.page_link(pages[APPOINTMENTS], label="Appointments", icon="📅")
-        st.page_link(pages[AVAILABILITY], label="My Availability", icon="🕒")
-        if st.button("Logout", key="doctor_logout"):
-            _logout()
-
-
-def render_patient_app() -> None:
-    """Patient workspace: top navigation across the patient pages."""
-    if st.session_state.get("active_page") not in PAGE_OPTIONS:
-        st.session_state.active_page = PAGE_OPTIONS[0]
-
-    with st.sidebar:
-        st.write(f"Signed in as: {st.session_state.authenticated_user.get('email', 'User')}")
-        if st.button("Logout"):
-            st.session_state.pop("authenticated_user", None)
-            st.session_state.pop("active_page", None)
-            st.rerun()
-
-    render_practitioner_notifications()
-
-    # The PHP tab label changes once the patient has a practitioner, so keep a
-    # stable option value and only vary what is displayed.
-    practitioner_label = get_practitioner_tab_label()
-    selected_page = st.segmented_control(
-        "Navigation",
-        options=PAGE_OPTIONS,
-        format_func=lambda page: practitioner_label if page == PRACTITIONER_PAGE else page,
-        key="active_page",
-        label_visibility="collapsed",
-    )
-    if selected_page is None:
-        selected_page = PAGE_OPTIONS[0]
-
-    if selected_page == "Disease Prediction":
-        render_prediction_page()
-    elif selected_page == PRACTITIONER_PAGE:
-        render_practitioner_page()
-    elif selected_page == APPOINTMENTS_PAGE:
-        render_appointments_page()
-    elif selected_page == MY_PRESCRIPTIONS_PAGE:
-        render_my_prescriptions_page()
-    else:
-        render_dashboard_page()
+    # Navigation is drawn by render_sidebar so it can be grouped and include a profile summary;
+    # detail pages stay registered (reachable by st.switch_page) without appearing in the sidebar.
+    current = st.navigation(pages, position="hidden")
+    if user is None:
+        st.session_state[REQUESTED_PATH_KEY] = current.url_path
+    current.run()
 
 
 if __name__ == "__main__":

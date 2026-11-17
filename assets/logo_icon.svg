@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="DeltaAI">
+  <rect x="0" y="0" width="32" height="32" rx="8" fill="#2563EB"/>
+  <path d="M16 7 L26 25 H6 Z" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M9.5 19 H13 L14.8 15.5 L17.2 21.5 L19 19 H22.5" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

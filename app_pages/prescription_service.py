@@ -274,3 +274,16 @@ def list_prescriptions_for_patient(prescriptions_collection, patient_email: str)
             {"patient_email": patient_email, "status": {"$in": PATIENT_VISIBLE_STATUSES}}
         ).sort("created_at", -1)
     )
+
+
+def list_prescriptions_by_doctor(
+    prescriptions_collection,
+    doctor_email: str,
+    statuses: list[str] | None = None,
+) -> list[dict]:
+    """Every prescription this doctor wrote, across all patients, newest first, optionally filtered by status."""
+    doctor_email = _normalize_email(doctor_email)
+    if prescriptions_collection is None or not doctor_email:
+        return []
+    found = prescriptions_collection.find({"doctor_email": doctor_email}).sort("created_at", -1)
+    return [prescription for prescription in found if statuses is None or prescription.get("status") in statuses]

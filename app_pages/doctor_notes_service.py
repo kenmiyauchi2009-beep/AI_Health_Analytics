@@ -85,3 +85,12 @@ def get_doctor_notes(notes_collection, patient_id, analysis_id=None) -> list[Doc
     if analysis_id is not None:
         query["analysis_id"] = analysis_id
     return [DoctorNote.from_document(document) for document in notes_collection.find(query).sort("created_at", -1)]
+
+
+def list_notes_by_doctor(notes_collection, doctor_email: str) -> list[DoctorNote]:
+    """Return every note this doctor has written, across all patients, newest first."""
+    doctor_email = _normalize_email(doctor_email)
+    if notes_collection is None or not doctor_email:
+        return []
+    found = notes_collection.find({"doctor_email": doctor_email}).sort("created_at", -1)
+    return [DoctorNote.from_document(document) for document in found]

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="168" height="32" viewBox="0 0 168 32" role="img" aria-label="DeltaAI Health">
+  <rect x="0" y="0" width="32" height="32" rx="8" fill="#2563EB"/>
+  <path d="M16 7 L26 25 H6 Z" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M9.5 19 H13 L14.8 15.5 L17.2 21.5 L19 19 H22.5" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="42" y="21.5" font-family="IBM Plex Sans, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#0F172A">DeltaAI</text>
+  <text x="107" y="21.5" font-family="IBM Plex Sans, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="400" fill="#64748B">Health</text>
+</svg>

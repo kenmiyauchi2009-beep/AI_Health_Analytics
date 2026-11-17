@@ -99,5 +99,27 @@ class PatientOverviewTests(unittest.TestCase):
         self.assertIsNone(get_patient_overview(self.users, self.requests, "other@example.com", "pat@example.com"))
 
 
+
+
+class UpdateKnownConditionsTests(unittest.TestCase):
+    def test_saves_trimmed_unique_conditions(self):
+        from app_pages.patient_overview_service import update_known_conditions
+
+        users = FakeCollection([{"email": "pat@example.com", "known_conditions": []}])
+        saved, errors = update_known_conditions(users, "Pat@Example.com", [" Asthma ", "asthma", "", "Diabetes"])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(saved, ["Asthma", "Diabetes"])
+        self.assertEqual(users.docs[0]["known_conditions"], ["Asthma", "Diabetes"])
+
+    def test_rejects_long_conditions_and_unknown_patients(self):
+        from app_pages.patient_overview_service import update_known_conditions
+
+        users = FakeCollection([{"email": "pat@example.com"}])
+        self.assertTrue(update_known_conditions(users, "pat@example.com", ["x" * 81])[1])
+        self.assertTrue(update_known_conditions(users, "nobody@example.com", ["Asthma"])[1])
+        self.assertTrue(update_known_conditions(None, "pat@example.com", [])[1])
+
+
 if __name__ == "__main__":
     unittest.main()

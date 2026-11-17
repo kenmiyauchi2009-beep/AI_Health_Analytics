@@ -7,7 +7,8 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Virtual environment `venv` exists.
 - Lean Cloud-friendly `requirements.txt` (sklearn `>=1.7.2` for Python 3.14 wheels).
 - `app.py` only orchestrates top-level pages.
-- Disease Prediction with sub-tabs: **Predict** | **Clusters**, plus **Ask AI** panel below results
+- New health analysis page: searchable symptoms → one **Analyze symptoms** click runs the classifier and K-Means → Model output / Patient subgroup / AI explanation sections
+- UI design system in `ui/` (see `ui/DESIGN.md`); theme tokens in `.streamlit/config.toml`
 - Groq-powered assistant (`assistant/`) explains ML outputs only
 - Secrets: `.streamlit/secrets.toml` (gitignored) with `GROQ_API_KEY`
 - Tests: `python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant tests.test_practitioner tests.test_registration tests.test_patient_overview tests.test_analysis_review tests.test_doctor_notes tests.test_prescriptions tests.test_appointments -v`
@@ -16,22 +17,20 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 
 ### 1) App-level orchestration
 - **File:** `app.py`
-- **Navigation:** Exclusive top `st.segmented_control` for `Dashboard` / `Disease Prediction`
-- **Page config:** `st.set_page_config` once in `app.py`
+- **Navigation:** `st.navigation(position="hidden")` + a grouped sidebar of `st.page_link`s (`app_pages/sidebar.py`); see "Page routing"
+- **Page config + theme:** `st.set_page_config` and `ui.theme.apply_theme()` once in `app.py`
 
-### 2) Dashboard page
-- **File:** `app_pages/dashboard_page.py`
-- Upload-first CSV explorer with count plot, scatter, correlation matrix
-- Plot sizes capped to avoid Pillow decompression bomb errors
+### 2) Data explorer (patient) and doctor dashboard
+- **File:** `app_pages/dashboard_page.py` (`render_patient_dashboard` = Data explorer; `render_doctor_dashboard`, `render_my_patients_page`, `render_patient_requests_page`)
+- Upload-first CSV explorer with count plot, scatter, correlation matrix (Altair, `dashboard/plots_view.py`); chart settings live on the page, not the sidebar
 - Use `return` (not `st.stop()`) for early exits
 
-### 3) Disease Prediction page
-- **File:** `app_pages/prediction_page.py`
-- Shared symptom checklist above sub-tabs
-- Sub-tabs:
-  - **Predict** — logistic regression disease probabilities
-  - **Clusters** — K-Means assign / browse / compare
-- Below both tabs: **Ask AI about your results** (requires Predict and/or Cluster result first)
+### 3) New health analysis page
+- **File:** `app_pages/prediction_page.py`; widgets in `prediction/ui_view.py`
+- Step 1: `st.multiselect` over the model's own feature names (type-ahead search, readable labels via `format_symptom`); feature order still comes from `Symptoms.to_feature_vector()`
+- **Analyze symptoms** runs both models, stores `latest_prediction`, `latest_cluster_assignment`, `selected_symptoms`, and saves the prediction to history
+- Step 2 sections, each labelled by provenance: Disease prediction (Model output, Altair alternatives chart), Patient subgroup (Subgroup analysis + "Explore all patient subgroups" browse/compare), Ask about your results (AI explanation)
+- Custom model uploaders are in the "Use your own model files" expander
 
 ### 4) Prediction package (`prediction/`)
 
@@ -81,7 +80,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 
 ## Cluster Behavior
 - Confidence: **softmax of inverse distances** to centroids (C1)
-- UI: **Predict | Clusters** sub-tabs (D3)
+- UI: patient subgroup section on the analysis results; browse/compare in an expander
 - Assign shows: cluster id, confidence, top symptoms, common diseases
 - Browse: pick any cluster 0–7
 - Compare: two clusters side-by-side + shared top symptoms/diseases
@@ -92,7 +91,7 @@ Build a beginner-friendly Streamlit Bio Explorer app with clear separation of co
 - Disease confidence threshold: **0.50**
 - Disease ranked display: **Top-1 + Top-3**
 - Cluster confidence: **softmax(inverse distance)**
-- Cluster UI: **sub-tabs on Disease Prediction page**
+- Cluster UI: **Patient subgroup section on the analysis results** (replaced the old sub-tabs)
 - Cloud: prefer Python **3.12** in Streamlit Advanced settings; `runtime.txt` is ignored
 
 ## How To Run
@@ -146,7 +145,8 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
 - MongoDB collection `prescriptions`: `prescription_id` (`SIM-RX-YYYYMMDD-XXXXXX`, unique), `patient_id`/`patient_email`/`patient_name`, `doctor_id`/`doctor_email`/`doctor_name`, `analysis_id`, `doctor_note`, `medications[]` (name, dosage, frequency, duration, instructions), `status`, `is_simulated`, timestamps, `void_reason`, `audit_history[]` (action, by, at, details)
 - Rules (enforced in the service): new → **draft**; drafts visible/editable/finalizable only by their author; create + finalize require being the patient's current Primary Health Practitioner; **finalized** is read-only; the author can **void** a finalized one with a reason (confirm dialog); voided stays in history; patients see only their own finalized + voided; every create/edit/status change is appended to `audit_history`
 - Doctor flow: Patient Overview → **Prescriptions** section (counts) → **View Prescriptions** (`/patient-prescriptions`, filters Draft/Finalized/Voided, View/Edit) → **Create Prescription** / Edit (`/prescription-editor`, add/remove medication rows, Save as draft / Finalize) → detail (`/prescription-detail`, PDF, Finalize/Void, audit history)
-- Confirmation dialogs stay open via session-state flags (`rx_finalize_dialog`, `rx_void_dialog`), closed by Cancel/confirm/`on_dismiss`
+- Finalize/void use `ui.components.confirmation_dialog` (keys `rx-finalize-…`, `rx-void-…`); navigation after a dialog goes through `rx_pending_page`
+- Doctor-wide list: Clinical workspace > Prescriptions (`prescription_management_page.py`, `list_prescriptions_by_doctor`)
 
 ## Appointments
 - **Files:** `availability_service.py` (settings, validation, slot generation), `appointment_service.py` (statuses + rules), both unit-tested in `tests/test_appointments.py`; UI in `availability_page.py` (doctor `/availability`), `appointment_doctor_page.py` (doctor `/appointments`), `appointment_patient_page.py` (patient **Appointments** tab), shared widgets in `appointment_ui.py`
@@ -157,14 +157,22 @@ python -m unittest tests.test_prediction tests.test_cluster tests.test_assistant
 - Reservations: pending (until `expires_at`) and confirmed appointments, plus pending reschedule proposals. `expires_at` = min(created + 24h, slot start). Expiry is lazy (`expire_stale()` runs on every read/write) — no background job
 - Booking rules: only with the patient's current Primary Health Practitioner; future, valid, free slot; reason required; no overlapping active appointments for the patient (any doctor). After inserting, `_lost_race()` re-checks and deletes the later of two simultaneous bookings
 - Reschedule: either party, on a future pending/confirmed appointment; original unchanged until the other party accepts; accepting moves the slot (and confirms a pending appointment)
-- Doctor nav: dashboard buttons + metrics, and a sidebar (Dashboard / Appointments / My Availability / Logout)
+- Pages: patient Book appointment / My appointments; doctor Appointment requests / My appointments / My availability
 - Editors use `on_click` callbacks for add/remove rows (not `st.rerun()` mid-page) so every widget is drawn each run and keeps its value
 
 ## Page routing
-- `app.py` always calls `st.navigation(..., position="hidden")` and picks the pages for the user: Sign in (signed out), the patient app (segmented control, unchanged), or the doctor pages
-- Doctor pages live in `app_pages/doctor_navigation.py`: Doctor Dashboard (default) → Patient Overview → Review Analysis. Move between them with `go_to(...)` (`st.switch_page`), which keeps session state
+- `app.py` always calls `st.navigation(..., position="hidden")` and picks the pages for the user; `app_pages/sidebar.py` draws the grouped links (Streamlit highlights the current page), profile summary and Log out
+- Patient pages: `app_pages/patient_navigation.py`; doctor pages: `app_pages/doctor_navigation.py`. Each has `SIDEBAR_GROUPS`, `page(KEY)` for links/breadcrumbs and `go_to(KEY)` (`st.switch_page`, keeps session state; not callable from `on_click` callbacks)
+- Doctor detail pages (patient overview, review analysis, patient prescriptions, editor, detail) are registered but not in the sidebar; they use breadcrumbs
+- Signed out, every app URL shows the sign-in screen (no "page not found"); after sign-in the user stays on that URL if their role has it, otherwise goes to their home page
 - Reloading the browser starts a new session, so the user must sign in again (auth is session-only)
 - `AppTest` renders only the default page per run; set `at._page_hash = calc_hash("<url-path>")` to test another page
+
+## UI design system
+- Read `ui/DESIGN.md` before changing any page. Tokens: `.streamlit/config.toml` (IBM Plex Sans, palette, semantic status colours; "violet" is themed teal). CSS: only `ui/theme.py` (keyed `card-*` / `lane-*` containers, `data-testid` hooks)
+- Components (`ui/components.py`): `page_header` (+ breadcrumb, returns actions slot), `section_header` (+ provenance badge), `card`, `entity_card`, `field_grid`, `metric_row`, `chart_container`, `form_section`, `status_badge`, `empty_state`, `show_errors`/`error_message`, `flash`/`show_flash`, `confirmation_dialog`/`open_dialog`, `search_and_filter`, `data_table`, `chat_message`
+- Provenance: Model output (blue) / Subgroup analysis (teal) / AI explanation (gray) on both the patient results page and the doctor's Review analysis
+- New patient pages: Home, Analysis history, Health profile (editable known conditions → `update_known_conditions`), AI assistant (any saved analysis), Profile. New doctor pages: My patients, Patient requests, Doctor's notes (`list_notes_by_doctor`), Prescriptions, AI assistant, Profile
 
 ## Notes For Next Agent
 - Keep `app.py` thin.

@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from app_pages.doctor_notes_service import DoctorNote, get_doctor_notes, save_doctor_note
+from app_pages.doctor_notes_service import DoctorNote, get_doctor_notes, list_notes_by_doctor, save_doctor_note
 from app_pages.patient_overview_service import get_patient_overview
 from tests.test_practitioner import FakeCollection
 
@@ -43,6 +43,29 @@ class DoctorNoteTests(unittest.TestCase):
         self.assertEqual([note.text for note in notes], ["Second", "First"])
         self.assertEqual(notes[0].id, last.id)
         self.assertEqual(len(get_doctor_notes(self.notes, 7)), 3)
+
+    def test_lists_notes_by_doctor_across_patients_newest_first(self):
+        oldest, _ = save_doctor_note(self.notes, PATIENT, "doc@example.com", "Oldest", 501)
+        save_doctor_note(self.notes, {"id": 8, "email": "x@example.com"}, "Doc@Example.com", "Other patient")
+        save_doctor_note(self.notes, PATIENT, "someone@example.com", "Another doctor's note", 501)
+        newest, _ = save_doctor_note(self.notes, PATIENT, "doc@example.com", "Newest", 502)
+        for doc in self.notes.docs:
+            doc["created_at"] = {oldest.id: datetime(2020, 1, 1), newest.id: datetime(2030, 1, 1)}.get(
+                doc["_id"], datetime(2025, 1, 1)
+            )
+
+        notes = list_notes_by_doctor(self.notes, " DOC@example.com ")
+
+        self.assertEqual([note.text for note in notes], ["Newest", "Other patient", "Oldest"])
+        self.assertEqual(notes[1].patient_email, "x@example.com")
+        self.assertIsNone(notes[1].analysis_id)
+        self.assertEqual(notes[0].analysis_id, 502)
+
+    def test_list_notes_by_doctor_handles_missing_inputs(self):
+        save_doctor_note(self.notes, PATIENT, "doc@example.com", "Hi")
+        self.assertEqual(list_notes_by_doctor(None, "doc@example.com"), [])
+        self.assertEqual(list_notes_by_doctor(self.notes, ""), [])
+        self.assertEqual(list_notes_by_doctor(self.notes, "nobody@example.com"), [])
 
     def test_patient_overview_exposes_patient_id(self):
         users = FakeCollection(

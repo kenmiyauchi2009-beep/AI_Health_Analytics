@@ -1,6 +1,7 @@
 import re
 import unittest
 import zlib
+from datetime import datetime
 
 from app_pages.prescription_pdf import build_prescription_pdf, prescription_pdf_filename
 from app_pages.prescription_service import (
@@ -12,6 +13,7 @@ from app_pages.prescription_service import (
     finalize_prescription,
     generate_prescription_id,
     get_prescription_for_doctor,
+    list_prescriptions_by_doctor,
     list_prescriptions_for_doctor,
     list_prescriptions_for_patient,
     update_draft,
@@ -167,6 +169,36 @@ class PrescriptionServiceTests(unittest.TestCase):
             [rx["status"] for rx in list_prescriptions_for_doctor(self.rx, "other@example.com", "pat@example.com")],
             [STATUS_FINALIZED],
         )
+
+
+    def test_list_by_doctor_spans_patients_newest_first(self):
+        older, _ = self._create(medications=[{**MEDICATION, "name": "Older"}])
+        self._finalize(older)
+        self.users.docs.append({"_id": 5, "email": "kim@example.com", "role": "Patient", "primary_doctor_email": "doc@example.com"})
+        newer, _ = self._create(patient={"id": 5, "email": "kim@example.com", "name": "Kim"},
+                                medications=[{**MEDICATION, "name": "Newer"}])
+        self.rx.update_one({"_id": older["_id"]}, {"$set": {"created_at": datetime(2026, 1, 1)}})
+        self.rx.update_one({"_id": newer["_id"]}, {"$set": {"created_at": datetime(2026, 2, 1)}})
+        self._create(doctor=OTHER_DOCTOR, patient={"id": 4, "email": "eve@example.com", "name": "Eve"})
+
+        found = list_prescriptions_by_doctor(self.rx, " DOC@example.com ")
+        self.assertEqual([rx["medications"][0]["name"] for rx in found], ["Newer", "Older"])
+        self.assertEqual({rx["patient_email"] for rx in found}, {"pat@example.com", "kim@example.com"})
+        self.assertTrue(all(rx["doctor_email"] == "doc@example.com" for rx in found))
+
+    def test_list_by_doctor_status_filter_and_missing_inputs(self):
+        finalized, _ = self._create()
+        self._finalize(finalized)
+        self._create()
+
+        self.assertEqual(
+            [rx["status"] for rx in list_prescriptions_by_doctor(self.rx, "doc@example.com", [STATUS_DRAFT])],
+            [STATUS_DRAFT],
+        )
+        self.assertEqual(list_prescriptions_by_doctor(self.rx, "doc@example.com", []), [])
+        self.assertEqual(list_prescriptions_by_doctor(self.rx, "other@example.com"), [])
+        self.assertEqual(list_prescriptions_by_doctor(self.rx, ""), [])
+        self.assertEqual(list_prescriptions_by_doctor(None, "doc@example.com"), [])
 
 
 class PrescriptionPdfTests(unittest.TestCase):

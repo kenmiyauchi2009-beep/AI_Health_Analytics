@@ -5,13 +5,14 @@ from __future__ import annotations
 import streamlit as st
 
 from app_pages.doctor_navigation import (
-    DASHBOARD,
+    MY_PATIENTS,
     PATIENT_OVERVIEW,
     PRESCRIPTIONS,
     REVIEW_ANALYSIS,
     REVIEWING_ANALYSIS_KEY,
     VIEWING_PATIENT_KEY,
     go_to,
+    page,
 )
 from app_pages.patient_overview_service import get_patient_analyses, get_patient_overview, review_analysis
 from app_pages.prescription_service import (
@@ -26,6 +27,8 @@ from app_pages.registration_page import (
     get_requests_collection,
     get_users_collection,
 )
+from ui.components import card, empty_state, entity_card, field_grid, metric_row, page_header, section_header
+
 
 def open_patient_overview(patient_email: str) -> None:
     """Switch the doctor workspace to this patient's overview."""
@@ -34,14 +37,9 @@ def open_patient_overview(patient_email: str) -> None:
     go_to(PATIENT_OVERVIEW)
 
 
-def _close_patient_overview() -> None:
-    st.session_state.pop(VIEWING_PATIENT_KEY, None)
-    st.session_state.pop(REVIEWING_ANALYSIS_KEY, None)
-    go_to(DASHBOARD)
-
-
 def _format_time(value) -> str:
-    return value.strftime("%b %d, %Y %I:%M %p") if hasattr(value, "strftime") else "Unknown date"
+    # Analyses are stored in naive UTC.
+    return f"{value.strftime('%b %d, %Y %I:%M %p')} UTC" if hasattr(value, "strftime") else "Unknown date"
 
 
 def _format_symptom(name: str) -> str:
@@ -49,60 +47,98 @@ def _format_symptom(name: str) -> str:
 
 
 def _render_profile(patient: dict) -> None:
-    st.subheader("Patient Profile")
-    with st.container(border=True):
-        st.write(f"**Name:** {patient['name']}")
-        st.write(f"**Age:** {patient['age'] if patient['age'] is not None else 'Not provided'}")
-        conditions = ", ".join(patient["known_conditions"]) or "None recorded"
-        st.write(f"**Known conditions:** {conditions}")
+    with card("patient-profile"):
+        field_grid(
+            [
+                ("Age", patient["age"] if patient["age"] is not None else "Not provided"),
+                ("Known conditions", ", ".join(patient["known_conditions"]) or "None recorded"),
+                ("Email", patient["email"]),
+            ]
+        )
 
 
 def _render_analysis(analysis: dict, patient_email: str) -> None:
     analysis_id = str(analysis["_id"])
-    with st.container(border=True):
-        header_col, status_col = st.columns([3, 1])
-        with header_col:
-            st.write(f"**Date:** {_format_time(analysis.get('created_at'))}")
-        with status_col:
-            if analysis.get("reviewed"):
-                st.caption(f"✅ Reviewed {_format_time(analysis.get('reviewed_at'))}")
-            else:
-                st.caption("🕒 Not reviewed")
+    reviewed = bool(analysis.get("reviewed"))
+    symptoms = ", ".join(_format_symptom(symptom) for symptom in analysis.get("symptoms") or [])
+    subtitle = f"Reviewed {_format_time(analysis.get('reviewed_at'))}" if reviewed else "Waiting for your review"
 
-        symptoms = ", ".join(_format_symptom(symptom) for symptom in analysis.get("symptoms") or [])
-        st.write(f"**Symptoms:** {symptoms or 'None recorded'}")
-        st.write(f"**Prediction:** {analysis.get('top_disease') or 'Unknown'}")
-        st.write(f"**Confidence:** {float(analysis.get('top_probability') or 0):.1%}")
-        if analysis.get("reviewed") and analysis.get("review_notes"):
-            st.write(f"**Review notes:** {analysis['review_notes']}")
-
-        if st.button("Review Analysis", key=f"review_analysis_{analysis_id}"):
+    container = entity_card(
+        f"analysis-{analysis_id}",
+        f"Analysis {_format_time(analysis.get('created_at'))}",
+        subtitle=subtitle,
+        status=("review", "reviewed" if reviewed else "unreviewed"),
+        fields=[
+            ("Predicted condition", analysis.get("top_disease") or "Unknown"),
+            ("Model confidence", f"{float(analysis.get('top_probability') or 0):.1%}"),
+            ("Reported symptoms", symptoms or "None recorded"),
+        ],
+    )
+    with container:
+        if analysis.get("is_low_confidence"):
+            st.caption(":material/warning: Low model confidence: no condition reached the confidence threshold.")
+        if reviewed and analysis.get("review_notes"):
+            st.markdown(f":gray[Review notes]  \n{analysis['review_notes']}")
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            clicked = st.button(
+                "Review analysis",
+                key=f"review_analysis_{analysis_id}",
+                type="secondary" if reviewed else "primary",
+                icon=":material/clinical_notes:",
+            )
+        if clicked:
             user = st.session_state.get("authenticated_user") or {}
             review_analysis(get_analyses_collection(), analysis["_id"], patient_email, user.get("email"))
             st.session_state[REVIEWING_ANALYSIS_KEY] = analysis_id
             go_to(REVIEW_ANALYSIS)
 
 
-def _render_prescriptions_section(patient: dict) -> None:
-    st.subheader("Prescriptions")
-    user = st.session_state.get("authenticated_user") or {}
-    prescriptions = list_prescriptions_for_doctor(get_prescriptions_collection(), user.get("email"), patient["email"])
-    with st.container(border=True):
-        counts = st.columns(3)
-        for column, (status, label) in zip(
-            counts, [(STATUS_DRAFT, "Your drafts"), (STATUS_FINALIZED, "Finalized"), (STATUS_VOIDED, "Voided")]
-        ):
-            column.metric(label, sum(1 for prescription in prescriptions if prescription.get("status") == status))
-        st.caption("Simulated prescriptions for educational demonstration only.")
-        if st.button("View Prescriptions", key="patient_overview_prescriptions", type="primary"):
-            go_to(PRESCRIPTIONS)
+def _render_analysis_history(patient: dict, analyses: list[dict]) -> None:
+    section_header("Analysis history", "Disease predictions the patient has run, newest first")
+    if not analyses:
+        empty_state(
+            "No analyses yet",
+            f"When {patient['name']} runs a disease prediction, it appears here for you to review.",
+            icon=":material/clinical_notes:",
+            key="patient-analyses",
+        )
+        return
+    for analysis in analyses:
+        _render_analysis(analysis, patient["email"])
+
+
+def _render_prescriptions_section(prescriptions: list[dict]) -> None:
+    actions = section_header(
+        "Prescriptions",
+        "Simulated prescriptions for educational demonstration only. Nothing is sent to a pharmacy.",
+    )
+    if actions.button("View prescriptions", key="patient_overview_prescriptions", icon=":material/medication:"):
+        go_to(PRESCRIPTIONS)
+    with card("patient-prescriptions"):
+        field_grid(
+            [
+                (label, sum(1 for prescription in prescriptions if prescription.get("status") == status))
+                for status, label in [
+                    (STATUS_DRAFT, "Your drafts"),
+                    (STATUS_FINALIZED, "Finalized"),
+                    (STATUS_VOIDED, "Voided"),
+                ]
+            ]
+        )
 
 
 def load_viewed_patient() -> dict | None:
-    """Return the patient picked on the dashboard, or show why it can't be shown."""
+    """Return the patient picked on My patients, or show why it can't be shown."""
     patient_email = st.session_state.get(VIEWING_PATIENT_KEY)
     if not patient_email:
-        st.info("No patient is selected. Go back to the dashboard and click **View Patient**.")
+        empty_state(
+            "No patient selected",
+            "Open a patient from My patients to see their details.",
+            icon=":material/person_search:",
+            key="no-patient",
+            action_label="Go to my patients",
+            page=page(MY_PATIENTS),
+        )
         return None
 
     user = st.session_state.get("authenticated_user") or {}
@@ -113,28 +149,41 @@ def load_viewed_patient() -> dict | None:
         patient_email,
     )
     if patient is None:
-        st.error("This patient could not be found, or you are not their Primary Health Practitioner.")
+        empty_state(
+            "This patient can't be shown",
+            "The patient could not be found, or you are no longer their primary health practitioner.",
+            icon=":material/person_off:",
+            key="patient-unavailable",
+            action_label="Go to my patients",
+            page=page(MY_PATIENTS),
+        )
     return patient
 
 
 def render_page() -> None:
-    """Patient Overview page for the patient picked on the doctor dashboard."""
-    if st.button("← Back to dashboard", key="patient_overview_back"):
-        _close_patient_overview()
-
+    """Patient overview page for the patient picked on My patients."""
     patient = load_viewed_patient()
     if patient is None:
         return
 
-    st.title("Patient Overview")
-    _render_profile(patient)
-    _render_prescriptions_section(patient)
-
-    st.subheader("Analysis History")
+    user = st.session_state.get("authenticated_user") or {}
     analyses = get_patient_analyses(get_analyses_collection(), patient["email"])
-    if not analyses:
-        st.info("This patient has not run any disease predictions yet.")
-        return
+    prescriptions = list_prescriptions_for_doctor(get_prescriptions_collection(), user.get("email"), patient["email"])
 
-    for analysis in analyses:
-        _render_analysis(analysis, patient["email"])
+    page_header(
+        patient["name"],
+        "Profile, analysis history and prescriptions for a patient in your care",
+        breadcrumb=[("My patients", page(MY_PATIENTS)), (patient["name"], None)],
+    )
+    _render_profile(patient)
+    metric_row(
+        [
+            ("Analyses", len(analyses), "Disease predictions this patient has run"),
+            ("Not reviewed", sum(1 for analysis in analyses if not analysis.get("reviewed")),
+             "Analyses you haven't opened yet"),
+            ("Prescriptions", len(prescriptions), "Simulated prescriptions you can see for this patient"),
+        ],
+        key="patient-overview",
+    )
+    _render_analysis_history(patient, analyses)
+    _render_prescriptions_section(prescriptions)

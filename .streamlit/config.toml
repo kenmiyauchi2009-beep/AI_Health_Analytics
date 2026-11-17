@@ -1,0 +1,61 @@
+# DeltaAI design tokens. Most of the visual system lives here so pages need very little custom CSS.
+# The few styles Streamlit can't express (card surfaces, page width) are in ui/theme.py.
+
+[theme]
+base = "light"
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+baseFontSize = 15
+headingFontSizes = ["30px", "22px", "18px", "16px", "14px", "13px"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+metricValueFontSize = "28px"
+metricValueFontWeight = 600
+
+primaryColor = "#2563EB"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+linkColor = "#2563EB"
+linkUnderline = false
+borderColor = "#E2E8F0"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "8px"
+buttonRadius = "8px"
+
+# Semantic colours: used for statuses only, never decoration.
+blueColor = "#2563EB"
+blueBackgroundColor = "#EFF6FF"
+blueTextColor = "#1D4ED8"
+greenColor = "#16A34A"
+greenBackgroundColor = "#F0FDF4"
+greenTextColor = "#15803D"
+orangeColor = "#D97706"
+orangeBackgroundColor = "#FFFBEB"
+orangeTextColor = "#B45309"
+yellowColor = "#D97706"
+yellowBackgroundColor = "#FFFBEB"
+yellowTextColor = "#B45309"
+redColor = "#DC2626"
+redBackgroundColor = "#FEF2F2"
+redTextColor = "#B91C1C"
+grayColor = "#64748B"
+grayBackgroundColor = "#F1F5F9"
+grayTextColor = "#475569"
+# Streamlit has no "teal" token; the violet slot carries the teal secondary accent (see ui/theme.py TEAL).
+violetColor = "#0D9488"
+violetBackgroundColor = "#F0FDFA"
+violetTextColor = "#0F766E"
+
+dataframeBorderColor = "#E2E8F0"
+dataframeHeaderBackgroundColor = "#F8FAFC"
+chartCategoricalColors = ["#2563EB", "#0D9488", "#64748B", "#93C5FD", "#5EEAD4", "#CBD5E1"]
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8FAFC"
+borderColor = "#E2E8F0"
+
+[client]
+# Hide developer controls (Deploy, rerun menu) from end users.
+toolbarMode = "minimal"

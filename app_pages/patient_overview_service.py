@@ -108,3 +108,20 @@ def review_analysis(analyses_collection, analysis_id, patient_email: str, doctor
         {"$set": fields},
     )
     return result.matched_count > 0
+
+
+def update_known_conditions(users_collection, patient_email: str, conditions) -> tuple[list[str], list[str]]:
+    """Replace a patient's known conditions. Returns (saved conditions, errors)."""
+    patient_email = _normalize_email(patient_email)
+    if users_collection is None:
+        return [], ["The database is not available right now."]
+    cleaned = []
+    for condition in parse_known_conditions(conditions):
+        if len(condition) > 80:
+            return [], [f"\"{condition[:30]}…\" is too long. Keep each condition under 80 characters."]
+        if condition.lower() not in {item.lower() for item in cleaned}:
+            cleaned.append(condition)
+    result = users_collection.update_one({"email": patient_email}, {"$set": {"known_conditions": cleaned}})
+    if not result.matched_count:
+        return [], ["Your account could not be found."]
+    return cleaned, []
