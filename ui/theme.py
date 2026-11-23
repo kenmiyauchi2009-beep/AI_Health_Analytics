@@ -23,10 +23,12 @@ BADGE_COLOR_TEAL = "violet"
 
 _CSS = f"""
 <style>
-/* Readable line length on wide screens; Streamlit stacks columns on narrow ones. */
+/* Readable line length on wide screens; Streamlit stacks columns on narrow ones.
+   Top padding must clear the fixed app header (3.75rem): on Streamlit Cloud it is opaque and would
+   otherwise cover the top of the page. */
 [data-testid="stMainBlockContainer"] {{
     max-width: 1180px;
-    padding-top: 2.25rem;
+    padding-top: 5rem;
     padding-bottom: 4rem;
 }}
 
