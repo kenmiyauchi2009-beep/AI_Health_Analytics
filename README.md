@@ -44,32 +44,67 @@ The project has three layers that depend on each other:
 
 ## Application preview
 
-<!--
-Screenshots are added by hand. See docs/screenshots/README.md for filenames and privacy rules.
-To show an image, remove the comment markers around its line once the file exists.
--->
-
-Screenshots are being added. The full checklist and capture instructions are in [docs/screenshots/README.md](docs/screenshots/README.md).
+All screenshots use fictional demonstration accounts and data. Capture instructions and naming rules are in [docs/screenshots/README.md](docs/screenshots/README.md).
 
 ### Patient experience
 
-<!-- ![Sign-in screen](docs/screenshots/login-registration.png) -->
-<!-- ![Patient home](docs/screenshots/patient-home.png) -->
-<!-- ![Symptom selection](docs/screenshots/symptom-selection.png) -->
-<!-- ![Disease prediction results](docs/screenshots/disease-prediction.png) -->
-<!-- ![Patient subgroup from K-Means clustering](docs/screenshots/patient-subgroup.png) -->
-<!-- ![AI assistant explaining results](docs/screenshots/ai-assistant.png) -->
-<!-- ![Appointment booking](docs/screenshots/appointment-booking.png) -->
-<!-- ![Simulated prescriptions](docs/screenshots/patient-prescriptions.png) -->
+**Sign in.** Patients and doctors share one sign-in screen; the role on the account decides which pages they get.
+
+![Sign-in screen](docs/screenshots/login-registration.png)
+
+**Home.** The next appointment, the latest analysis and the connected doctor, with links into each area.
+
+![Patient home](docs/screenshots/patient-home.png)
+
+**Step 1: symptom selection.** A searchable list of the 132 symptoms the model was trained on.
+
+![Symptom selection](docs/screenshots/symptom-selection.png)
+
+**Step 2: model output.** The classifier's top prediction, the next two alternatives, and a low-confidence warning because no condition reached 50%.
+
+![Disease prediction results](docs/screenshots/disease-prediction.png)
+
+**Step 2: subgroup analysis.** The nearest K-Means cluster, with its most common symptoms and conditions, presented as a similarity grouping rather than a diagnosis.
+
+![Patient subgroup from K-Means clustering](docs/screenshots/patient-subgroup.png)
+
+**Step 2: AI explanation.** A real answer from the Groq-hosted LLM, generated only from the model and cluster results above.
+
+![AI assistant explaining results](docs/screenshots/ai-assistant.png)
+
+**Appointment booking.** Free slots generated from the doctor's working hours, shown in the doctor's time zone.
+
+![Appointment booking](docs/screenshots/appointment-booking.png)
+
+**Simulated prescriptions.** Finalized prescriptions with a PDF download, clearly marked as not legally valid.
+
+![Simulated prescriptions](docs/screenshots/patient-prescriptions.png)
 
 ### Doctor experience
 
-<!-- ![Doctor dashboard](docs/screenshots/doctor-dashboard.png) -->
-<!-- ![Patient overview](docs/screenshots/patient-overview.png) -->
-<!-- ![Analysis review](docs/screenshots/analysis-review.png) -->
-<!-- ![Appointment management](docs/screenshots/appointment-management.png) -->
-<!-- ![Availability settings](docs/screenshots/availability.png) -->
-<!-- ![Prescription management](docs/screenshots/prescription-management.png) -->
+**Dashboard.** Upcoming visits, plus everything waiting for the doctor: appointment requests, a new patient request and unreviewed analyses.
+
+![Doctor dashboard](docs/screenshots/doctor-dashboard.png)
+
+**Patient overview.** Profile, known conditions and full analysis history, with review status for each analysis.
+
+![Patient overview](docs/screenshots/patient-overview.png)
+
+**Analysis review.** The same three labelled sources the patient sees, a doctor-specific AI assistant, and the doctor's notes for this analysis.
+
+![Analysis review](docs/screenshots/analysis-review.png)
+
+**Appointment requests.** A pending request holds its slot until it expires; the doctor can accept, reject or propose another time.
+
+![Appointment management](docs/screenshots/appointment-management.png)
+
+**Availability.** Weekly hours with split shifts, appointment length, breaks and blocked dates, with a preview of bookable times.
+
+![Availability settings](docs/screenshots/availability.png)
+
+**Prescription detail.** A finalized simulated prescription with its audit history.
+
+![Prescription management](docs/screenshots/prescription-management.png)
 
 ---
 
