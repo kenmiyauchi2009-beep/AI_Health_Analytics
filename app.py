@@ -1,8 +1,10 @@
 import streamlit as st
 
 from app_pages.dashboard_page import get_user_role
+from app_pages.doctor_navigation import DASHBOARD as DOCTOR_HOME
 from app_pages.doctor_navigation import SIDEBAR_GROUPS as DOCTOR_GROUPS
 from app_pages.doctor_navigation import doctor_pages
+from app_pages.patient_navigation import HOME as PATIENT_HOME
 from app_pages.patient_navigation import SIDEBAR_GROUPS as PATIENT_GROUPS
 from app_pages.patient_navigation import patient_pages
 from app_pages.registration_page import render_auth_gate
@@ -32,11 +34,14 @@ def main() -> None:
         pages = _signed_out_pages()
     else:
         role = get_user_role(user)
-        pages_by_key, groups = (doctor_pages(), DOCTOR_GROUPS) if role == "Doctor" else (patient_pages(), PATIENT_GROUPS)
+        if role == "Doctor":
+            pages_by_key, groups, home = doctor_pages(), DOCTOR_GROUPS, DOCTOR_HOME
+        else:
+            pages_by_key, groups, home = patient_pages(), PATIENT_GROUPS, PATIENT_HOME
         requested = st.session_state.pop(REQUESTED_PATH_KEY, None)
         if requested is not None and requested not in pages_by_key:
             # Signed in on a URL this role doesn't have (e.g. a patient page link): start on the home page.
-            st.switch_page(next(page for page in pages_by_key.values() if page.default))
+            st.switch_page(pages_by_key[home])
         render_sidebar(groups, pages_by_key, user, role)
         pages = list(pages_by_key.values())
 
